@@ -449,17 +449,19 @@ void kmain(kinfo_t *local_cbi)
  *===========================================================================*/
 static void announce(void)
 {
-  /* Display the MINIX startup banner. */
-  printf("\nMINIX %s. "
+  /* Display the startup banner: the system is Ixolo, the kernel is MINIX.
+   * The MINIX copyright line is an attribution; keep it.
+   */
+  printf("\n" DISTRO_NAME " " DISTRO_RELEASE " (MINIX %s kernel) "
 #ifdef PAE
 "(PAE) "
 #endif
 #ifdef _VCS_REVISION
-	"(" _VCS_REVISION ")\n"
+	"(" _VCS_REVISION ")"
 #endif
+      "\nBased on MINIX 3, see https://www.minix3.org\n"
       "Copyright 2016, Vrije Universiteit, Amsterdam, The Netherlands\n",
       OS_RELEASE);
-  printf("MINIX is open source software, see http://www.minix3.org\n");
 }
 
 /*===========================================================================*
@@ -474,7 +476,7 @@ void prepare_shutdown(const int how)
    * do shutdown work.  Set a watchog timer to call shutdown(). The timer 
    * argument passes the shutdown status. 
    */
-  printf("MINIX will now be shut down ...\n");
+  printf(DISTRO_NAME " will now be shut down ...\n");
   set_kernel_timer(&shutdown_timer, get_monotonic() + system_hz,
       minix_shutdown, how);
 }
@@ -505,12 +507,12 @@ void minix_shutdown(int how)
   /* Show shutdown message */
   direct_cls();
   if((how & RB_POWERDOWN) == RB_POWERDOWN)
-	direct_print("MINIX has halted and will now power off.\n");
+	direct_print(DISTRO_NAME " has halted and will now power off.\n");
   else if(how & RB_HALT)
-	direct_print("MINIX has halted. "
+	direct_print(DISTRO_NAME " has halted. "
 		     "It is safe to turn off your computer.\n");
   else
-	direct_print("MINIX will now reset.\n");
+	direct_print(DISTRO_NAME " will now reset.\n");
   arch_shutdown(how);
 }
 

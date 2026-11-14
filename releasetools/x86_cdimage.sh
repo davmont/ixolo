@@ -40,11 +40,11 @@ workdir_add_kernel minix_default
 # (AHCI) and i440fx-class (IDE) machines.  To force a choice when debugging,
 # use "Edit menu option" / "Drop to boot prompt" and add ahci=yes or ahci=no.
 cat >${ROOT_DIR}/boot.cfg <<END_BOOT_CFG
-banner=Welcome to the MINIX 3 installation CD
+banner=Welcome to the Ixolo installation CD
 banner================================================================================
 banner=
-menu=Regular MINIX 3:multiboot /boot/minix_default/kernel bootcd=1 cdproberoot=1
-menu=MINIX 3 (serial console):multiboot /boot/minix_default/kernel bootcd=1 cdproberoot=1 console=tty00
+menu=Regular Ixolo:multiboot /boot/minix_default/kernel bootcd=1 cdproberoot=1
+menu=Ixolo (serial console):multiboot /boot/minix_default/kernel bootcd=1 cdproberoot=1 console=tty00
 menu=Edit menu option:edit
 menu=Drop to boot prompt:prompt
 clear=1

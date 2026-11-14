@@ -82,7 +82,7 @@ check_mbr()
 		if [ "$?" -ne 0 ]
 		then
 			echo ""
-			echo "Warning: you have MBR which doesn't support multiple MINIX 3 partitions!"
+			echo "Warning: you have MBR which doesn't support multiple Ixolo partitions!"
 			echo "You will be able to boot from the first one only!"
 			echo -n "Do you want to install new MBR into $disk? [Y] "
 			read ok
@@ -125,8 +125,8 @@ case $thisroot:$fdusr in
 esac
 
 echo -n "
-Welcome to the MINIX 3 setup script.  This script will guide you in setting up
-MINIX on your machine.  Please consult the manual for detailed instructions.
+Welcome to the Ixolo setup script.  This script will guide you in setting up
+Ixolo on your machine.  Please consult the manual for detailed instructions.
 
 Note 1: If the screen blanks, hit CTRL+F3 to select \"software scrolling\".
 Note 2: If things go wrong then hit CTRL+C to abort and start over.
@@ -191,10 +191,10 @@ step3=""
 while [ "$step3" != ok ]
 do
 	echo ""
-	echo " --- Step 3: Create or select a partition for MINIX 3 -------------------"
+	echo " --- Step 3: Create or select a partition for Ixolo --------------------"
 	echo ""
 
-    echo "Now you need to create a MINIX 3 partition on your hard disk."
+    echo "Now you need to create an Ixolo partition on your hard disk."
     echo "You can also select one that's already there."
     echo " "
     echo "If you have an existing installation, reinstalling will let you"
@@ -221,12 +221,12 @@ do
 	then
 		# Expert mode
 		echo -n "
-MINIX needs one primary partition of $TOTALMB MB for a full install,
+Ixolo needs one primary partition of $TOTALMB MB for a full install,
 plus what you want for /home.
 
 If there is no free space on your disk then you have to choose an option:
    (1) Delete one or more partitions
-   (2) Allocate an existing partition to MINIX 3
+   (2) Allocate an existing partition to Ixolo
    (3) Exit setup and shrink a partition using a different OS
 
 To make this partition you will be put in the editor \"part\".  Follow the
@@ -247,9 +247,9 @@ Please finish the name of the primary partition you have created:
 		    read primary
 		done
 		echo ""
-		echo "This is the point of no return.  You have selected to install MINIX"
+		echo "This is the point of no return.  You have selected to install Ixolo"
 		echo "on partition /dev/$primary.  Please confirm that you want to use this"
-		echo "selection to install MINIX."
+		echo "selection to install Ixolo."
 		echo ""
 		confirmation=""
 
@@ -342,7 +342,7 @@ echo " --- Step 4: Reinstall choice ------------------------------------------"
 	if mount -r /dev/$home $TMPMP >/dev/null 2>&1
 	then	umount /dev/$home >/dev/null 2>&1
 		echo ""
-		echo "You have selected an existing MINIX 3 partition."
+		echo "You have selected an existing Ixolo partition."
 		echo "Type F for full installation (to overwrite entire partition)"
 		echo "Type R for a reinstallation (existing /home will not be affected)"
 		echo ""
@@ -383,7 +383,7 @@ echo " --- Step 5: Select the size of /home ----------------------------------"
 		fi
 
 		echo ""
-		echo "MINIX will take up $TOTALMB MB, without /home."
+		echo "Ixolo will take up $TOTALMB MB, without /home."
 		echo -n "How big do you want your /home to be in MB (0-$maxhome) ? [$defmb] "
 		read homesize
 		if [ "$homesize" = "" ] ; then homesize=$defmb; fi
@@ -481,7 +481,7 @@ bootsectors=$BOOTXXSECTS
 check_mbr
 
 echo "
-You have selected to (re)install MINIX 3 in the partition /dev/$primary.
+You have selected to (re)install Ixolo in the partition /dev/$primary.
 The following subpartitions are now being created on /dev/$primary:
 
     Root subpartition:	/dev/$root	$ROOTMB MB
@@ -653,10 +653,10 @@ umount /dev/$usr && echo Unmounted $usr
 umount /dev/$root && echo Unmounted $root
 
 echo "
-Please type 'shutdown -r now' to exit MINIX 3 and reboot. To boot into
+Please type 'shutdown -r now' to exit Ixolo and reboot. To boot into
 your new system, you might have to remove the installation media.
 
-This ends the MINIX 3 setup script.  You may want to take care of post
+This ends the Ixolo setup script.  You may want to take care of post
 installation steps, such as local testing and configuration.
 
 Please consult the user manual for more information.

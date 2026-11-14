@@ -1,9 +1,8 @@
-For post-installation usage tips such as installing binary
-packages, please see:
-https://wiki.minix3.org/doku.php?id=usersguide:postinstallation
+Welcome to Ixolo, a desktop system built on the MINIX 3 microkernel.
 
-For more information on how to use MINIX 3, see the wiki:
+  /etc/os-release   which Ixolo release this is
+  startlxqt         start the graphical desktop (LXQt on Wayland)
+
+Ixolo inherits most of its documentation from MINIX 3:
 https://wiki.minix3.org
-
-We'd like your feedback: https://minix3.org/community/
 
