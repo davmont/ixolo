@@ -55,6 +55,7 @@
 
 #include <pixman.h>
 #include <fbgui.h>
+#include <minix/config.h>	/* DISTRO_NAME: wl_output make */
 #include <minix/input.h>
 
 #include <wayland-server.h>
@@ -2540,7 +2541,7 @@ bind_output(struct wl_client *client, void *data, uint32_t version, uint32_t id)
 	wl_list_insert(&C.outputs, wl_resource_get_link(r));
 
 	wl_output_send_geometry(r, 0, 0, w, h, WL_OUTPUT_SUBPIXEL_UNKNOWN,
-	    "MINIX", "fb0", WL_OUTPUT_TRANSFORM_NORMAL);
+	    DISTRO_NAME, "fb0", WL_OUTPUT_TRANSFORM_NORMAL);
 	wl_output_send_mode(r,
 	    WL_OUTPUT_MODE_CURRENT | WL_OUTPUT_MODE_PREFERRED, w, h, 60000);
 	if (version >= WL_OUTPUT_SCALE_SINCE_VERSION)
