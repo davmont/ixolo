@@ -10,10 +10,13 @@ a Wayland compositor, Qt 6 and the LXQt desktop.
 > **Ixolo and MINIX.** Ixolo is the system; MINIX 3 is its kernel and OS
 > interface, in the same way macOS runs on Darwin. `uname -s` still says
 > `Minix`, and software written for MINIX keeps working unchanged. The project
-> was called "MINIX 3 (davmont fork)" until November 2026. It is **not**
-> maintained or endorsed by the Stichting MINIX Research Foundation. See
-> [`docs/NAMING.md`](docs/NAMING.md) for why it was renamed and what the
-> rename does and does not touch.
+> was called "MINIX 3 (davmont fork)" until November 2026. It was renamed
+> because upstream MINIX 3 has not been developed since 2018 (its last stable
+> release was 3.3.0, in 2014), because the MINIX name is not ours to ship a
+> product under, and because the system has grown into something different. It is
+> **not** maintained or endorsed by the Stichting MINIX Research Foundation.
+> See [`docs/NAMING.md`](docs/NAMING.md) for the full reasoning and for what
+> the rename does and does not touch.
 
 ---
 

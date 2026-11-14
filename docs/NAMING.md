@@ -13,8 +13,26 @@ what it deliberately did not change, and the rules for keeping it that way.
 
 ## Why rename
 
-This tree started in March 2026 as a fork of upstream MINIX 3 (base
-`4db99f4`, November 2018). Since then it has become a different system:
+There are four reasons.
+
+**MINIX 3 is no longer developed.** The last stable release was MINIX
+3.3.0, in September 2014. MINIX 3.4.0 never got past release candidates and
+was never tagged. The last commit to upstream `master` (`4db99f4`) is dated
+14 November 2018, and it is the commit this tree forked from. Nobody is
+making new MINIX 3 releases, so "MINIX 3" would describe a system that hasn't
+changed in years, not this one. Ixolo continues the work under its own name
+rather than speaking for a project that has stopped.
+
+**The name MINIX is not ours to use.** This project has no rights to the
+"MINIX" name, and the name has carried trademark claims by third parties
+over the years. Shipping a different, independently maintained system as
+"MINIX" would suggest a connection to its owners that doesn't exist, and
+leave the project open to a trademark dispute. A separate name avoids both. Saying
+"based on MINIX 3", as the boot banner and this documentation do, describes
+where the code comes from. It doesn't put the name on our product.
+
+**It has become a different system.** This tree started in March 2026 as
+a fork of upstream MINIX 3 (base `4db99f4`, November 2018). Since then:
 
 - **A different platform.** The headline target is x86-64 (amd64), with SMP up to 32
   CPUs, UEFI boot, SMEP/SMAP/NX, ASLR, 47-bit user address spaces and RAM above
@@ -26,10 +44,10 @@ This tree started in March 2026 as a fork of upstream MINIX 3 (base
   only (GNU binutils and GCC are gone), its libc uses jemalloc, and the VM, VFS,
   MFS, libc and libpthread have hundreds of behavioural changes (MAP_SHARED,
   mprotect, mlock, tmpfs, POSIX shared memory, thread cancellation, …).
-- **A different maintainer.** This is not a release of the Stichting MINIX
-  Research Foundation, and they don't review or endorse it. With the name
-  "MINIX 3" on the boot screen, someone could easily think otherwise and report
-  Ixolo's bugs, or credit its changes, to the wrong project.
+**It has a different maintainer.** This is not a release of the Stichting
+MINIX Research Foundation, and they don't review or endorse it. With the name
+"MINIX 3" on the boot screen, someone could easily think otherwise and report
+Ixolo's bugs, or credit its changes, to the wrong project.
 
 A separate name makes all of that clear. Keeping MINIX as the kernel's name
 keeps the lineage clear, and keeps the credit with the people who built it.

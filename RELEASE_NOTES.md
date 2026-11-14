@@ -4,8 +4,13 @@
 
 The project formerly called "MINIX 3 (davmont fork)" is now **Ixolo**.
 Ixolo is the operating system, and MINIX 3 remains its kernel and OS
-interface, as Darwin is for macOS. The full rationale and the list of what
-was renamed are in [`docs/NAMING.md`](docs/NAMING.md).
+interface, as Darwin is for macOS.
+
+Why: upstream MINIX 3 is no longer developed (last stable release 3.3.0 in
+2014, last commit November 2018); the project has no rights to the MINIX
+name, which has carried trademark claims by third parties; and the system
+has grown well beyond what MINIX 3 was. The full rationale and the list of
+what was renamed are in [`docs/NAMING.md`](docs/NAMING.md).
 
 **What you will notice**
 
