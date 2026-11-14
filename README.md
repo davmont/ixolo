@@ -235,9 +235,7 @@ qemu-system-x86_64 --enable-kvm -cpu host -m 256 -hda minix_amd64.img
 6. To start the desktop on an image built with it, log in and run
    `startlxqt`.
 
-The installer is the MINIX 3 one with Ixolo's changes, so the
-[MINIX 3 Installation Guide](https://wiki.minix3.org/doku.php?id=usersguide:doinginstallation)
-still describes it well.
+Installation and usage documentation is at [www.ixolo.org](https://www.ixolo.org).
 
 ---
 
@@ -254,11 +252,11 @@ In this repository:
 - [`docs/UEFI_BOOT.md`](docs/UEFI_BOOT.md): UEFI and GPT boot
 - [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md): third-party code and how to update it
 
-Inherited from MINIX 3, still accurate for the kernel, servers and most of the
-userland:
+The legacy MINIX 3 project, for historical reference only. It is no longer
+developed and does not document Ixolo, but its design material still describes
+the kernel and servers Ixolo inherited:
 
-- [MINIX 3 Wiki](https://wiki.minix3.org) and its
-  [User Guide](https://wiki.minix3.org/doku.php?id=www:getting-started:start)
+- [MINIX 3 Wiki](https://wiki.minix3.org) (archive of the upstream project)
 - *Operating Systems: Design and Implementation* (3rd ed.), Tanenbaum & Woodhull
 
 ---
