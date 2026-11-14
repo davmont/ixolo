@@ -61,10 +61,17 @@ mkdir -p "$OUTDIR/bin"
 # the `tools` phase has built them: ln -s happily creates dangling links that
 # resolve once the tools exist, and any tool the build never invokes (ld.bfd,
 # ld.gold, ...) is harmless if it stays dangling.
-for t in addr2line ar as c++filt elfedit install ld ld.bfd ld.gold ld.lld nm \
+for t in addr2line ar as c++filt elfedit install ld.bfd ld.gold ld.lld nm \
          objcopy objdump ranlib readelf size strings strip; do
 	ln -sf "$TOOLDIR/bin/${TRIPLE}-$t" "$OUTDIR/bin/${TRIPLE}-$t"
 done
+# ${TRIPLE}-ld is lld.  GNU binutils is no longer built (d5bb293dd2), so there
+# is no $TOOLDIR ${TRIPLE}-ld any more; bsd.own.mk's EXTERNAL_TOOLCHAIN branch
+# still sets LD=.../${TRIPLE}-ld, and the direct "${LD} -r" callers
+# (bsd.lib.mk's *_pic.a, bsd.kmodule.mk) would otherwise hit a dangling link:
+# "x86_64-elf64-minix-ld: No such file or directory".  This matches the
+# non-external branch of bsd.own.mk, which already uses ld.lld for LD.
+ln -sf "$TOOLDIR/bin/${TRIPLE}-ld.lld" "$OUTDIR/bin/${TRIPLE}-ld"
 # Plain ld/as names so clang's NetBSD link driver finds the cross tools via -B.
 ln -sf "${TRIPLE}-ld" "$OUTDIR/bin/ld"
 ln -sf "${TRIPLE}-as" "$OUTDIR/bin/as"

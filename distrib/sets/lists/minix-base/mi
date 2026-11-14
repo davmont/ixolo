@@ -115,6 +115,7 @@
 ./etc/openssl/misc                                      minix-base      crypto
 ./etc/openssl/openssl.cnf                               minix-base      crypto
 ./etc/openssl/private                                   minix-base      crypto
+./etc/os-release                                        minix-base
 ./etc/passwd                                            minix-base
 ./etc/passwd.conf                                       minix-base
 ./etc/profile                                           minix-base

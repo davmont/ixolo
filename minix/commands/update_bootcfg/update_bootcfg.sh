@@ -120,7 +120,7 @@ do
 	build_name="`basename $i`"
 	if [ "$build_name" != "$latest" ]
 	then
-		echo "menu=Start MINIX 3 ($build_name):load_mods $DIRSBASE/$i/mod*;multiboot $DIRSBASE/$i/kernel rootdevname=$rootdevname $args" >> $TMP
+		echo "menu=Start Ixolo ($build_name):load_mods $DIRSBASE/$i/mod*;multiboot $DIRSBASE/$i/kernel rootdevname=$rootdevname $args" >> $TMP
 	fi
 done
 

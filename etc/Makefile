@@ -212,10 +212,23 @@ MAKEDEV: .PHONY
 .endif # !defined(__MINIX)
 
 .include "${NETBSDSRCDIR}/etc/Makefile.params"
+
+.if defined(__MINIX)
+# Distribution identity, read from the single source of truth in config.h.
+_MINIX_CONFIG_H=	${NETBSDSRCDIR}/minix/include/minix/config.h
+_CONFIG_STR=	awk '$$1 == "\#define" && $$2 == KEY { split($$0, a, "\""); print a[2] }' ${_MINIX_CONFIG_H}
+DISTRO_NAME!=	${_CONFIG_STR:S/KEY/"DISTRO_NAME"/}
+DISTRO_ID!=	${_CONFIG_STR:S/KEY/"DISTRO_ID"/}
+DISTRO_RELEASE!=	${_CONFIG_STR:S/KEY/"DISTRO_RELEASE"/}
+_RELEASE_HEADER=	${DISTRO_NAME} ${DISTRO_RELEASE} (MINIX ${DISTRIBVER})/${MACHINE}
+.else
+_RELEASE_HEADER=	NetBSD ${DISTRIBVER}/${MACHINE}
+.endif
+
 CLEANFILES+=	etc-release
 etc-release: .EXEC .MAKE
 	${_MKTARGET_CREATE}
-	@(	echo "NetBSD ${DISTRIBVER}/${MACHINE}"; \
+	@(	echo "${_RELEASE_HEADER}"; \
 		echo ; \
 		cat ${NETBSDSRCDIR}/sys/conf/copyright; \
 		echo ; \
@@ -237,10 +250,34 @@ etc-release: .EXEC .MAKE
 		${PRINT_PARAMS} ; \
 	) >${.OBJDIR}/${.TARGET}
 
+.if defined(__MINIX)
+# /etc/os-release (freedesktop.org format).  ID_LIKE=minix lets software
+# that keys off the OS family keep treating Ixolo as MINIX.
+CLEANFILES+=	etc-os-release
+etc-os-release: .EXEC .MAKE ${_MINIX_CONFIG_H}
+	${_MKTARGET_CREATE}
+	@(	echo 'NAME="${DISTRO_NAME}"'; \
+		echo 'ID=${DISTRO_ID}'; \
+		echo 'ID_LIKE=minix'; \
+		echo 'VERSION="${DISTRO_RELEASE} (MINIX ${DISTRIBVER})"'; \
+		echo 'VERSION_ID=${DISTRO_RELEASE}'; \
+		echo 'PRETTY_NAME="${DISTRO_NAME} ${DISTRO_RELEASE}"'; \
+		echo 'HOME_URL="https://www.ixolo.org/"'; \
+		echo 'DOCUMENTATION_URL="https://www.ixolo.org/"'; \
+		echo 'BUG_REPORT_URL="https://github.com/davmont/ixolo/issues"'; \
+	) >${.OBJDIR}/${.TARGET}
+.endif
+
 install-etc-release: .PHONY etc-release
 	${_MKMSG_INSTALL} etc/release
 	${ETC_INSTALL_OBJ_FILE} -o ${BINOWN} -g ${BINGRP} -m 444 \
 	    etc-release ${DESTDIR}/etc/release
+.if defined(__MINIX)
+	${MAKEDIRTARGET} . etc-os-release
+	${_MKMSG_INSTALL} etc/os-release
+	${ETC_INSTALL_OBJ_FILE} -o ${BINOWN} -g ${BINGRP} -m 444 \
+	    etc-os-release ${DESTDIR}/etc/os-release
+.endif
 
 
 FILESDIR=		/etc

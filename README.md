@@ -1,40 +1,50 @@
-MINIX 3
-=======
+Ixolo
+=====
 
-MINIX 3 is a free, open-source operating system designed to be highly reliable,
-flexible, and secure. Unlike traditional monolithic kernels (like Linux or
-Windows) where a single driver crash can bring down the entire system, MINIX 3
-is built on a tiny microkernel architecture.
+Ixolo is a free, open-source desktop operating system built on the
+**MINIX 3 microkernel**. It keeps what makes MINIX distinctive (a tiny
+kernel, with drivers and servers isolated in user mode and restarted when they
+crash) and adds what a modern desktop needs: a 64-bit SMP kernel, UEFI boot,
+a Wayland compositor, Qt 6 and the LXQt desktop.
 
-The project's primary goal is to create a "self-healing" system that can detect
-and repair its own faults on the fly without user intervention.
-
-> **Note:** This repository is a fork maintained by David Montero and is NOT
-> maintained by the Stichting MINIX Research Foundation. See
-> [What's New](#whats-new-in-this-fork) for changes relative to upstream.
+> **Ixolo and MINIX.** Ixolo is the system; MINIX 3 is its kernel and OS
+> interface, in the same way macOS runs on Darwin. `uname -s` still says
+> `Minix`, and software written for MINIX keeps working unchanged. The project
+> was called "MINIX 3 (davmont fork)" until November 2026. It was renamed
+> because upstream MINIX 3 has not been developed since 2018 (its last stable
+> release was 3.3.0, in 2014), because the MINIX name is not ours to ship a
+> product under, and because the system has grown into something different. It is
+> **not** maintained or endorsed by the Stichting MINIX Research Foundation.
+> See [`docs/NAMING.md`](docs/NAMING.md) for the full reasoning and for what
+> the rename does and does not touch.
 
 ---
 
 ## Key Features
 
-- **Fault Tolerance** — Most of the OS runs as isolated user-mode processes. If
-  a driver crashes, it is automatically restarted by the Reincarnation Server
-  without affecting the rest of the system.
-- **Microkernel Design** — The kernel itself is only about 6,000 lines of
-  executable code, making it easier to verify and secure.
-- **POSIX Compliant** — Supports a wide range of standard UNIX software.
-- **NetBSD Compatibility** — Uses the NetBSD pkgsrc package management system,
-  giving access to thousands of prebuilt packages.
-- **Multi-Architecture** — Runs on x86 (IA-32), x86-64 (amd64), and ARM.
-- **SMP Support** — Symmetric multi-processing up to 32 CPUs.
-- **Educational Foundation** — Originally created by Andrew S. Tanenbaum; a
-  world-class resource for learning OS design and implementation.
+- **Fault Tolerance** — Most of the OS runs as isolated user-mode processes.
+  If a driver crashes, the Reincarnation Server restarts it without affecting
+  the rest of the system.
+- **Microkernel Design** — The MINIX kernel is only about 6,000 lines of
+  executable code, which makes it easier to verify and secure.
+- **64-bit and SMP** — x86-64 (amd64) with symmetric multi-processing up to
+  32 CPUs, and boot from legacy BIOS or UEFI.
+- **Graphical desktop** — `wlcompd` (a Wayland compositor) runs Qt 6 and LXQt,
+  with a panel, taskbar, four virtual desktops and a terminal. `startlxqt`
+  brings it all up with one command.
+- **Hardened** — NX, SMEP/SMAP, ASLR, stack protector and FORTIFY across
+  userland.
+- **POSIX and NetBSD userland** — A NetBSD-derived userland and pkgsrc.
+- **Modern toolchain** — Built with LLVM/clang and LLD only, with no GCC and no
+  GNU binutils.
+- **Educational foundation** — MINIX was created by Andrew S. Tanenbaum, and
+  its source remains a world-class resource for learning OS design.
 
 ---
 
 ## Architecture
 
-MINIX 3 is structured in four layers:
+Ixolo inherits the MINIX 3 structure of four layers:
 
 | Layer | Name | Responsibility |
 |-------|------|----------------|
@@ -45,20 +55,31 @@ MINIX 3 is structured in four layers:
 
 ---
 
-## What's New in This Fork
+## What Ixolo Adds to MINIX 3
 
-The headline change is a working **x86-64 (amd64) kernel port** that boots
-to a login prompt on both legacy BIOS and UEFI firmware, with SMP, an IPC
-fastpath, modern CPU features, and most NetBSD userland tools intact.
-Other highlights since the upstream base:
+Ixolo started from upstream MINIX 3 (`4db99f4`, November 2018). The
+headline changes are a working **x86-64 (amd64) kernel port** that boots on
+both legacy BIOS and UEFI firmware, and a **graphical desktop** on top of it.
+Highlights:
 
-- **amd64 SMP** — full AP bring-up, per-CPU GDT/IDT/TSS, BKL serialization,
+- **Desktop stack** — `wlcompd`, a Wayland compositor with xdg-shell,
+  layer-shell, foreign-toplevel and workspace support; libwayland, Qt 6.11
+  (statically linked), D-Bus 1.16, GLib 2.80, LXQt 2.4 (session, panel,
+  runner, config) and qterminal. See [`docs/WAYLAND.md`](docs/WAYLAND.md) and
+  [`releasetools/DESKTOP.md`](releasetools/DESKTOP.md).
+- **Memory and POSIX** — Writable shared file mappings and `msync`, `mprotect`,
+  `mlock`, `MAP_SHARED` anonymous memory across `fork`, POSIX shared memory on
+  a new `tmpfs`, asynchronous and deferred thread cancellation, `ppoll`,
+  `getentropy`.
+- **Exploit mitigations** — SMEP/SMAP, NX for non-executable mappings, ASLR for stack and
+  `mmap`, the stack protector and FORTIFY on amd64, and OpenSSH 10.6.
+- **amd64 SMP** — Full AP bring-up, per-CPU GDT/IDT/TSS, BKL serialization,
   validated on `-smp 2/4/8` up to 32 CPUs. (See the "amd64 subsystem state"
   table below.)
 - **IPC fastpath + colocation** — SENDREC same-CPU fastpath plus a Tier 1
   scheduler that migrates servers to their dominant client's CPU; **4.86×**
   SMP IPC throughput improvement on `-smp 4` (p50 78k → 16k cycles).
-- **Hybrid BIOS + UEFI boot** — single CD image boots on either firmware via
+- **Hybrid BIOS + UEFI boot** — Single CD image boots on either firmware via
   El Torito with a GRUB-built EFI System Partition. Multiboot 2.0 + ACPI
   RSDP handoff implemented; linear-framebuffer text console for headless
   UEFI environments.
@@ -68,15 +89,16 @@ Other highlights since the upstream base:
 - **New drivers** — Intel I225/I226 2.5 GbE (`igc`), EHCI USB host (Phase 1),
   OHCI scaffolding (Phase 3a), multi-controller `usbd`, AHCI / legacy IDE
   auto-detect at boot.
-- **Allocator** — switched libc to `jemalloc`.
-- **Security hardening** — tree-wide audit replacing unsafe `strcpy` /
+- **Allocator** — Switched libc to `jemalloc`.
+- **Security hardening** — Tree-wide audit replacing unsafe `strcpy` /
   `sprintf` / `system()` patterns; buffer-overflow fixes in `kgets`, `backup`,
   `fdisk`, `minix-service`; ELF auxvec UID/GID populated correctly.
 - **Performance** — 30+ O(N²) `strlen`-in-loop patterns eliminated across the
   tree.
-- **Build & toolchain** — GCC 15 compatibility, LLVM/clang by default,
-  NetBSD 10 host-tools sync, C++ ATF and `kyua-cli` tests re-enabled.
-- **Test coverage** — new ATF tests for `dup2`, libc string functions, the
+- **Build & toolchain** — LLVM/clang and LLD only (GCC and GNU binutils
+  removed), host clang 22 as the cross compiler, NetBSD 10 host-tools sync,
+  C++ ATF and `kyua-cli` tests re-enabled.
+- **Test coverage** — New ATF tests for `dup2`, libc string functions, the
   ISC event timer library, `hgfs`, `cd9660`, and PM `ptrace`.
 
 For the full change log, see [`RELEASE_NOTES.md`](RELEASE_NOTES.md).
@@ -126,25 +148,31 @@ A snapshot of where each piece of the amd64 port stands. ✓ = production-grade,
 
 ### Prerequisites
 
-For the best experience, run MINIX 3 inside a virtual machine.
+For the best experience, run Ixolo inside a virtual machine.
 
-- **Hypervisor:** VirtualBox, VMware, or QEMU
-- **Image:** build from source (see below) or download from the upstream
-  [Official Downloads Page](https://wiki.minix3.org)
+- **Hypervisor:** QEMU/KVM (best tested), VirtualBox or VMware
+- **Image:** build from source (see below). There are no prebuilt Ixolo
+  images yet; the upstream MINIX 3 downloads are a different system.
+- **Build host:** Linux with clang 20 or newer (the build is tested with
+  clang 22).
 
 ### Building from Source
 
 ```sh
-# i386 (original upstream target)
+# amd64: replace 16 with your CPU core count, clang-22 with your host clang.
+# A fresh object directory needs the `tools` step; later builds can add -u.
+sh build.sh -c clang-22 -j16 -mamd64 -O ../build -U tools release
+OBJ=../build bash releasetools/amd64_cdimage.sh
+
+# i386 (the original upstream target)
 sh build.sh -j4 -mi386 -O ../obj.i386 -U release
 bash releasetools/x86_cdimage.sh
-
-# amd64 (this fork) — replace 24 with your CPU core count
-sh build.sh -m amd64 -U -j24 -O ../obj.amd64 release
-OBJ=../obj.amd64 bash releasetools/amd64_cdimage.sh
 ```
 
-The build produces `minix_amd64.iso` in the current directory.
+The build produces `minix_amd64.iso` in the current directory. The image
+files keep their `minix_*` names; see [`docs/NAMING.md`](docs/NAMING.md).
+To include the LXQt desktop in the image, see
+[`releasetools/DESKTOP.md`](releasetools/DESKTOP.md) (`MKDESKTOP=yes`).
 
 ### Testing an image
 
@@ -175,7 +203,7 @@ the slow TCG path.
 ### Running in QEMU
 
 > **Important — `-cpu host` is required for amd64.**
-> MINIX uses the `WRFSBASE` instruction for TLS setup; QEMU's default `kvm64`
+> The kernel uses the `WRFSBASE` instruction for TLS setup; QEMU's default `kvm64`
 > CPU model does not expose that feature (CPUID leaf 7 EBX bit 0), so the
 > kernel will panic at boot without it.
 
@@ -186,7 +214,7 @@ qemu-system-x86_64 --enable-kvm -cpu host -smp 4 -m 256 \
 
 # amd64 — direct kernel path (faster iteration)
 qemu-system-x86_64 --enable-kvm -cpu host \
-    -kernel ../obj.amd64/minix/kernel/kernel \
+    -kernel ../build/minix/kernel/kernel \
     -append "bootcd=1 cdproberoot=1" \
     -cdrom minix_amd64.iso
 
@@ -204,18 +232,34 @@ qemu-system-x86_64 --enable-kvm -cpu host -m 256 -hda minix_amd64.img
 3. Log in as `root` (no password).
 4. Run `setup` and follow the prompts.
 5. Power off, remove the ISO, reboot.
+6. To start the desktop on an image built with it, log in and run
+   `startlxqt`.
 
-For detailed instructions see the
-[MINIX 3 Installation Guide](https://wiki.minix3.org/doku.php?id=usersguide:doinginstallation).
+The installer is the MINIX 3 one with Ixolo's changes, so the
+[MINIX 3 Installation Guide](https://wiki.minix3.org/doku.php?id=usersguide:doinginstallation)
+still describes it well.
 
 ---
 
 ## Documentation
 
-- **Official Wiki:** [wiki.minix3.org](https://wiki.minix3.org)
-- **User Guide:** [Getting Started](https://wiki.minix3.org/doku.php?id=www:getting-started:start)
-- **Release Notes:** [`RELEASE_NOTES.md`](RELEASE_NOTES.md) — detailed changelog since the fork
-- **Book:** *Operating Systems: Design and Implementation* (3rd ed.) — Tanenbaum & Woodhull
+- **Website and documentation:** [www.ixolo.org](https://www.ixolo.org)
+- **Bug reports and feature requests:** [GitHub issues](https://github.com/davmont/ixolo/issues)
+
+In this repository:
+
+- [`docs/NAMING.md`](docs/NAMING.md): Ixolo vs MINIX, what is called what and why
+- [`RELEASE_NOTES.md`](RELEASE_NOTES.md): detailed change log since the fork
+- [`docs/WAYLAND.md`](docs/WAYLAND.md) and [`releasetools/DESKTOP.md`](releasetools/DESKTOP.md): the graphics and desktop stack
+- [`docs/UEFI_BOOT.md`](docs/UEFI_BOOT.md): UEFI and GPT boot
+- [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md): third-party code and how to update it
+
+Inherited from MINIX 3, still accurate for the kernel, servers and most of the
+userland:
+
+- [MINIX 3 Wiki](https://wiki.minix3.org) and its
+  [User Guide](https://wiki.minix3.org/doku.php?id=www:getting-started:start)
+- *Operating Systems: Design and Implementation* (3rd ed.), Tanenbaum & Woodhull
 
 ---
 
@@ -224,7 +268,9 @@ For detailed instructions see the
 Pull requests are welcome. Whether you are fixing bugs, porting drivers, or
 improving documentation:
 
-- Source tree is at `/usr/src` on a running MINIX system.
+- The source tree is at `/usr/src` on a running Ixolo system.
+- Call the system *Ixolo* and the kernel *MINIX*, and never rename the
+  identifiers listed in [`docs/NAMING.md`](docs/NAMING.md).
 - Please follow existing BSD code style.
 - Prefer `strlcpy`/`strlcat` over `strcpy`/`strcat`; `snprintf` over `sprintf`.
 - For security-sensitive changes, reference the relevant CWE in the commit
@@ -234,5 +280,9 @@ improving documentation:
 
 ## License
 
-MINIX 3 is released under the **BSD-3-Clause License**. See the `LICENSE` file
-for details.
+Ixolo is released under the **BSD-3-Clause License**, the licence of the
+MINIX 3 code it is built on. See the `LICENSE` file for details. Third-party
+components keep their own licences; see [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md).
+
+MINIX 3 is copyright the Vrije Universiteit, Amsterdam. "MINIX" refers to
+the upstream project, which does not maintain or endorse Ixolo.

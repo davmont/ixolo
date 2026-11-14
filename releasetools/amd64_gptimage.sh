@@ -101,12 +101,12 @@ set timeout=5
 set default=0
 search --no-floppy --file --set=root /boot/minix_default/kernel
 
-menuentry "MINIX 3 (UEFI, GPT)" {
+menuentry "Ixolo (UEFI, GPT)" {
     multiboot2 /boot/minix_default/kernel rootdevname=${ROOTDEV} ahci=yes no_apic=0 acpi=1
 $(gen_modlines)
 }
 
-menuentry "MINIX 3 (UEFI, GPT, serial console)" {
+menuentry "Ixolo (UEFI, GPT, serial console)" {
     multiboot2 /boot/minix_default/kernel rootdevname=${ROOTDEV} ahci=yes no_apic=0 acpi=1 console=tty00
 $(gen_modlines)
 }

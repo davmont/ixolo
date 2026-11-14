@@ -1,4 +1,61 @@
-# MINIX 3 — Release Notes (davmont fork)
+# Ixolo — Release Notes
+
+## Ixolo 0.1.0: the project is renamed (November 2026)
+
+The project formerly called "MINIX 3 (davmont fork)" is now **Ixolo**.
+Ixolo is the operating system, and MINIX 3 remains its kernel and OS
+interface, as Darwin is for macOS.
+
+Why: upstream MINIX 3 is no longer developed (last stable release 3.3.0 in
+2014, last commit November 2018); the project has no rights to the MINIX
+name, which has carried trademark claims by third parties; and the system
+has grown well beyond what MINIX 3 was. The full rationale and the list of
+what was renamed are in [`docs/NAMING.md`](docs/NAMING.md).
+
+**What you will notice**
+
+- The boot banner reads `Ixolo 0.1.0 (MINIX 3.4.0 kernel)`, followed by
+  `Based on MINIX 3` and the Vrije Universiteit copyright.
+- Boot menus, the installation CD banner, the `setup` installer, `/etc/motd`
+  and the shutdown messages say Ixolo.
+- `uname -v` / `sysctl kern.version` report
+  `Ixolo 0.1.0 (Minix 3.4.0 GENERIC)`.
+- New **`/etc/os-release`**: `NAME="Ixolo"`, `ID=ixolo`, `ID_LIKE=minix`,
+  `VERSION_ID=0.1.0`. `/etc/release` names Ixolo on its first line.
+- The Wayland compositor reports its output manufacturer as `Ixolo`.
+- The GitHub repository moved from `davmont/minix` to **`davmont/ixolo`**.
+  GitHub redirects the old URL; update your remote with
+  `git remote set-url origin https://github.com/davmont/ixolo.git`.
+
+**What did not change** (on purpose; see `docs/NAMING.md`)
+
+- `uname -s` and `kern.ostype` are still `Minix`, and `uname -r` is still
+  `3.4.0`, so `build.sh`, autoconf `config.guess`, CMake/Qt platform checks
+  and pkgsrc all behave as before.
+- `__minix`, the `x86_64-elf64-minix` target triple, the `minix/` source
+  tree, the CD volume label `MINIX` (used by `cdprobe`), MBR partition type
+  `0x81`, the MFS file system and the `minix_*.iso` image names.
+
+**Versioning.** Ixolo has its own version (`DISTRO_RELEASE` in
+`minix/include/minix/config.h`), starting at 0.1.0. The MINIX version
+(`OS_RELEASE`, 3.4.0) remains the version of the kernel/OS interface.
+
+**Related fixes in this release**
+
+- `setup` found the package directory from the second word of `uname -v`,
+  which is now the Ixolo version. It uses `uname -r`.
+- Build: the `build.sh -c clang-22` external toolchain still pointed
+  `x86_64-elf64-minix-ld` at GNU ld, which was removed along with binutils. Once
+  a stale copy was cleaned out of the tool directory, every release build
+  failed in `lib/libpthread`. That name now points at `ld.lld`.
+
+---
+
+# Before the rename: MINIX 3 (davmont fork)
+
+The notes below were written while the project was still called MINIX 3. They
+are kept as they were.
+
 
 **Base:** upstream MINIX 3 @ `4db99f4` (November 2018)
 **Period:** March 2026 – June 2026

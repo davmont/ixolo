@@ -1,12 +1,25 @@
 #ifndef _CONFIG_H
 #define _CONFIG_H
 
+/* Distribution identity.  Ixolo is the system; MINIX is its kernel and OS
+ * ABI.  Only user-facing text (banners, motd, /etc/os-release, uname -v)
+ * uses the DISTRO_* names.  Everything that identifies the OS to software
+ * (uname -s, kern.ostype, __minix, *-minix target triples, config.guess)
+ * keeps saying Minix: changing OS_NAME breaks build.sh, autoconf and every
+ * cross-build recipe in external/.
+ */
+#define DISTRO_NAME "Ixolo"
+#define DISTRO_ID "ixolo"
+#define DISTRO_RELEASE "0.1.0"
+
 /* Minix release and version numbers. */
 #define OS_NAME "Minix"
 #define OS_RELEASE "3.4.0"	/* 3.m.p */
 #define OS_REV 304000000	/* see NetBSD sys/param.h: 3mm00pp00 */
 #define OS_CONFIG "GENERIC"
-#define OS_VERSION OS_NAME " " OS_RELEASE " (" OS_CONFIG ")"
+/* uname -v / kern.version: "Ixolo 0.1.0 (Minix 3.4.0 GENERIC)" */
+#define OS_VERSION DISTRO_NAME " " DISTRO_RELEASE \
+	" (" OS_NAME " " OS_RELEASE " " OS_CONFIG ")"
 
 /* This file sets configuration parameters for the MINIX kernel, FS, and PM.
  * It is divided up into two main sections.  The first section contains

@@ -1,3 +1,25 @@
+20261114:
+	The system is now called Ixolo; MINIX 3 remains its kernel.  See
+	docs/NAMING.md.  Nothing needs to be done for software to keep
+	working: uname -s is still "Minix" and uname -r is still "3.4.0".
+
+	What does change after "make build":
+	- uname -v and sysctl kern.version now read
+	  "Ixolo 0.1.0 (Minix 3.4.0 GENERIC)".  Scripts that took the release
+	  from the second word of uname -v must use uname -r instead.
+	- /etc/os-release is new and is installed automatically.
+	- The boot menu entries say "Start Ixolo" once do-hdboot has rewritten
+	  /boot.cfg, which "make build" does.
+	- /etc/motd is user-editable, so it is NOT replaced.  To get the new
+	  one:
+
+		# cp /usr/src/etc/motd /etc/motd
+
+	If your clone points at github.com/davmont/minix, the repository has
+	moved; the old URL redirects, but update it:
+
+		# git remote set-url origin https://github.com/davmont/ixolo.git
+
 20170303:
 	The entire network stack has been replaced.  This requires two updates.
 	First, BEFORE rebooting, either before or after rebuilding the system,

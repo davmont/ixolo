@@ -66,7 +66,7 @@ done
 
 # add boot.cfg
 cat >${ROOT_DIR}/boot.cfg <<END_BOOT_CFG
-menu=Start MINIX 3:load_mods /mod*; multiboot /kernel bootramdisk=1
+menu=Start Ixolo:load_mods /mod*; multiboot /kernel bootramdisk=1
 menu=Edit menu option:edit
 menu=Drop to boot prompt:prompt
 clear=1
