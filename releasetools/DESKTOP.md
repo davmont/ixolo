@@ -1,6 +1,6 @@
 # Building the LXQt/Qt6 desktop into an image
 
-The MINIX desktop (wlcompd + LXQt on Qt 6, software-rendered over Wayland) is an
+The Ixolo desktop (wlcompd + LXQt on Qt 6, software-rendered over Wayland) is an
 **out-of-tree** stack: glib, D-Bus, Qt 6, KDE Frameworks bits and the LXQt
 components are CMake/meson/autotools packages, not part of the reachover world.
 So a normal `build.sh release` builds the compositor (`wlcompd`/`wlclient`, which
