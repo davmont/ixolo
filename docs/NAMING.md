@@ -110,6 +110,16 @@ MINIX version, `OS_RELEASE` = **3.4.0**, stays as the version of the
 kernel and OS interface. It changes only when that interface changes in a way
 packages care about. Both appear in `uname -v` and `/etc/os-release`.
 
+**0.x means "not yet usable".** Ixolo stays on 0.x while it is still being
+brought up. **1.0** is the first release that is usable: something a person
+can download, install and use as their system without building it from source
+or working around known breakage. After that the numbers follow the usual
+rule: major for incompatible changes, minor for features, patch for fixes.
+
+Ixolo does **not** continue the MINIX numbering (3.5, 4.0, …). That would
+present it as the next MINIX release, which is exactly what the rename avoids,
+and it would be confused with `OS_RELEASE`, which package paths depend on.
+
 ## Where the name lives
 
 There is one source of truth: `minix/include/minix/config.h`.
