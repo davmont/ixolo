@@ -110,6 +110,17 @@ MINIX version, `OS_RELEASE` = **3.4.0**, stays as the version of the
 kernel and OS interface. It changes only when that interface changes in a way
 packages care about. Both appear in `uname -v` and `/etc/os-release`.
 
+**Why 3.4.0, when MINIX 3.4.0 was never released?** The number identifies
+a code base, not a finished release. Upstream `master` called itself 3.4.0
+throughout the 3.4 development cycle. Every 3.4.0 release candidate, and the
+commit Ixolo forked from, report `uname -r` = `3.4.0`. So "MINIX 3.4.0" is
+the accurate name of the MINIX line Ixolo is built on, even though upstream
+never declared it stable. The alternatives are worse: 3.3.0, the last stable
+release, would misdescribe the code, and 3.5.0 or 4.0 would invent MINIX
+releases that never happened. Since upstream will not bump it again, changing
+`OS_RELEASE` is now Ixolo's decision. Change it only if the kernel or OS
+interface changes in a way that breaks existing binaries or packages.
+
 **0.x means "not yet usable".** Ixolo stays on 0.x while it is still being
 brought up. **1.0** is the first release that is usable: something a person
 can download, install and use as their system without building it from source
