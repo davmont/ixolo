@@ -631,7 +631,7 @@ case "$hash" in
 *)	echo "FAILED TO SET THE ROOT PASSWORD: run passwd after booting."
 esac
 
-PACKAGES_DIR="/packages/$(uname -v | cut -f2 -d' ')/$(uname -p)/All"
+PACKAGES_DIR="/packages/$(uname -r)/$(uname -p)/All"
 if [ -e "$PACKAGES_DIR" ]
 then
 	echo "Installing pkgin..."
