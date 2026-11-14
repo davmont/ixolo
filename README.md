@@ -243,7 +243,10 @@ still describes it well.
 
 ## Documentation
 
-Ixolo-specific:
+- **Website and documentation:** [www.ixolo.org](https://www.ixolo.org)
+- **Bug reports and feature requests:** [GitHub issues](https://github.com/davmont/ixolo/issues)
+
+In this repository:
 
 - [`docs/NAMING.md`](docs/NAMING.md): Ixolo vs MINIX, what is called what and why
 - [`RELEASE_NOTES.md`](RELEASE_NOTES.md): detailed change log since the fork

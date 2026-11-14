@@ -262,6 +262,9 @@ etc-os-release: .EXEC .MAKE ${_MINIX_CONFIG_H}
 		echo 'VERSION="${DISTRO_RELEASE} (MINIX ${DISTRIBVER})"'; \
 		echo 'VERSION_ID=${DISTRO_RELEASE}'; \
 		echo 'PRETTY_NAME="${DISTRO_NAME} ${DISTRO_RELEASE}"'; \
+		echo 'HOME_URL="https://www.ixolo.org/"'; \
+		echo 'DOCUMENTATION_URL="https://www.ixolo.org/"'; \
+		echo 'BUG_REPORT_URL="https://github.com/davmont/ixolo/issues"'; \
 	) >${.OBJDIR}/${.TARGET}
 .endif
 
