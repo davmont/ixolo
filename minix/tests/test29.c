@@ -190,14 +190,11 @@ void test29c()
 	if (dup(i) != -1) e(1);
 	if (errno != EBADF) e(2);
 
-	/* ``i'' Is OPEN_MAX. */
-	if (i == OPEN_MAX) {
-		if (dup2(0, i) != -1) e(3);
-		if (errno != EINVAL) e(4);
-	}
-
-	/* ``i'' Is out of range. */
-	if (i < 0 || i > OPEN_MAX) {
+	/* ``i'' Is out of range, OPEN_MAX included: EBADF, as POSIX has
+	 * it.  (dup2() used to be close() and fcntl(F_DUPFD), which made it
+	 * EINVAL for OPEN_MAX itself.)
+	 */
+	if (i < 0 || i >= OPEN_MAX) {
 		if (dup2(0, i) != -1) e(5);
 		if (errno != EBADF) e(6);
 	}
