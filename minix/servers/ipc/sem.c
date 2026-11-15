@@ -2,6 +2,19 @@
 
 struct sem_struct;
 
+/*
+ * A SEM_UNDO adjustment: what to add to a semaphore when the process exits,
+ * to cancel the effect of its semop(2) calls with SEM_UNDO on it.  The set is
+ * named by its slot and sequence number, so that an entry for a removed set
+ * can never match a new one in the same slot.
+ */
+struct semundo {
+	unsigned short su_ix;		/* index in sem_list */
+	unsigned short su_seq;		/* that set's _seq */
+	unsigned short su_num;		/* semaphore number in the set */
+	int su_adj;			/* adjustment, -SEMAEM..SEMAEM, not 0 */
+};
+
 /* IPC-server process table, currently used for semaphores only. */
 struct iproc {
 	struct sem_struct *ip_sem;	/* affected semaphore set, or NULL */
@@ -11,6 +24,10 @@ struct iproc {
 	endpoint_t ip_endpt;		/* process endpoint */
 	pid_t ip_pid;			/* process PID */
 	TAILQ_ENTRY(iproc) ip_next;	/* next waiting process */
+	endpoint_t ip_undo_endpt;	/* owner of the entries below */
+	pid_t ip_undo_pid;		/* ...and its PID */
+	unsigned int ip_nundo;		/* number of SEM_UNDO entries */
+	struct semundo ip_undo[SEMUME];	/* SEM_UNDO adjustments */
 } iproc[NR_PROCS];
 
 struct semaphore {
@@ -244,6 +261,179 @@ complete_semop(struct iproc * ip, int code)
 }
 
 /*
+ * Return the SEM_UNDO entries of the process with the given endpoint: the
+ * process table slot, with entries left over from an earlier process in that
+ * slot thrown away.
+ */
+static struct iproc *
+undo_proc(endpoint_t endpt)
+{
+	struct iproc *ip;
+
+	ip = &iproc[_ENDPOINT_P(endpt)];
+	if (ip->ip_undo_endpt != endpt) {
+		ip->ip_undo_endpt = endpt;
+		ip->ip_nundo = 0;
+	}
+	return ip;
+}
+
+/*
+ * Find the SEM_UNDO entry of a process for a semaphore, or NULL.
+ */
+static struct semundo *
+undo_find(struct iproc * ip, struct sem_struct * sem, unsigned short num)
+{
+	unsigned int i, ix;
+
+	ix = sem - sem_list;
+	for (i = 0; i < ip->ip_nundo; i++)
+		if (ip->ip_undo[i].su_ix == ix && ip->ip_undo[i].su_num == num &&
+		    ip->ip_undo[i].su_seq == sem->semid_ds.sem_perm._seq)
+			return &ip->ip_undo[i];
+	return NULL;
+}
+
+/*
+ * Before a semop(2) call: check that the process has room for the SEM_UNDO
+ * entries the call would add, and that no adjustment would exceed SEMAEM.
+ * Nothing else changes a process's entries while it is blocked in the call,
+ * except that removing them (IPC_RMID, SETVAL, SETALL) frees room, so the
+ * check still holds when the call completes later.
+ */
+static int
+undo_check(endpoint_t endpt, struct sem_struct * sem, struct sembuf * sops,
+	unsigned int nsops)
+{
+	struct iproc *ip;
+	struct semundo *su;
+	unsigned int i, j, nnew;
+	int adj;
+
+	ip = undo_proc(endpt);
+	nnew = 0;
+	for (i = 0; i < nsops; i++) {
+		if (!(sops[i].sem_flg & SEM_UNDO) || sops[i].sem_op == 0)
+			continue;
+		/* Only the first operation on each semaphore counts it. */
+		for (j = 0; j < i; j++)
+			if ((sops[j].sem_flg & SEM_UNDO) && sops[j].sem_op != 0 &&
+			    sops[j].sem_num == sops[i].sem_num)
+				break;
+		if (j < i)
+			continue;
+		su = undo_find(ip, sem, sops[i].sem_num);
+		adj = (su != NULL) ? su->su_adj : 0;
+		for (j = i; j < nsops; j++)
+			if ((sops[j].sem_flg & SEM_UNDO) &&
+			    sops[j].sem_num == sops[i].sem_num)
+				adj -= sops[j].sem_op;
+		if (adj < -SEMAEM || adj > SEMAEM)
+			return ERANGE;
+		if (su == NULL)
+			nnew++;
+	}
+	if (ip->ip_nundo + nnew > SEMUME)
+		return ENOSPC;
+	return OK;
+}
+
+/*
+ * After a semop(2) call succeeded: record its SEM_UNDO adjustments.
+ * undo_check() has made sure there is room.
+ */
+static void
+undo_record(endpoint_t endpt, pid_t pid, struct sem_struct * sem,
+	struct sembuf * sops, unsigned int nsops)
+{
+	struct iproc *ip;
+	struct semundo *su;
+	unsigned int i;
+
+	ip = undo_proc(endpt);
+	ip->ip_undo_pid = pid;
+	for (i = 0; i < nsops; i++) {
+		if (!(sops[i].sem_flg & SEM_UNDO) || sops[i].sem_op == 0)
+			continue;
+		if ((su = undo_find(ip, sem, sops[i].sem_num)) == NULL) {
+			assert(ip->ip_nundo < SEMUME);
+			su = &ip->ip_undo[ip->ip_nundo++];
+			su->su_ix = sem - sem_list;
+			su->su_seq = sem->semid_ds.sem_perm._seq;
+			su->su_num = sops[i].sem_num;
+			su->su_adj = 0;
+		}
+		su->su_adj -= sops[i].sem_op;
+		if (su->su_adj == 0)
+			*su = ip->ip_undo[--ip->ip_nundo];
+	}
+}
+
+/*
+ * Drop every process's SEM_UNDO entries for semaphore 'num' of a set, or for
+ * all of its semaphores if 'num' is -1: POSIX has SETVAL and SETALL clear
+ * them, and they go with a removed set.
+ */
+static void
+undo_clear(struct sem_struct * sem, int num)
+{
+	struct iproc *ip;
+	unsigned int i, slot, ix;
+
+	ix = sem - sem_list;
+	for (slot = 0; slot < __arraycount(iproc); slot++) {
+		ip = &iproc[slot];
+		for (i = 0; i < ip->ip_nundo; ) {
+			if (ip->ip_undo[i].su_ix == ix &&
+			    (num == -1 || ip->ip_undo[i].su_num == num))
+				ip->ip_undo[i] = ip->ip_undo[--ip->ip_nundo];
+			else
+				i++;
+		}
+	}
+}
+
+static void check_set(struct sem_struct *);
+
+/*
+ * A process has exited: apply its SEM_UNDO adjustments, as if it had made
+ * the opposite semop(2) calls.  The result is kept within 0..SEMVMX rather
+ * than fail, as on NetBSD and Linux.
+ */
+static void
+undo_exit(endpoint_t endpt)
+{
+	struct iproc *ip;
+	struct semundo *su;
+	struct sem_struct *sem;
+	struct semaphore *sp;
+	int val;
+
+	ip = &iproc[_ENDPOINT_P(endpt)];
+	if (ip->ip_undo_endpt != endpt)
+		return;
+	while (ip->ip_nundo > 0) {
+		su = &ip->ip_undo[--ip->ip_nundo];
+		sem = &sem_list[su->su_ix];
+		if (!(sem->semid_ds.sem_perm.mode & SEM_ALLOC) ||
+		    sem->semid_ds.sem_perm._seq != su->su_seq)
+			continue;	/* cannot happen: undo_clear() */
+		sp = &sem->sems[su->su_num];
+		val = (int)sp->semval + su->su_adj;
+		if (val < 0)
+			val = 0;
+		else if (val > SEMVMX)
+			val = SEMVMX;
+		sp->semval = val;
+		sp->sempid = ip->ip_undo_pid;
+		sem->semid_ds.sem_otime = clock_time(NULL);
+		/* That may let others proceed. */
+		check_set(sem);
+	}
+	ip->ip_undo_endpt = NONE;
+}
+
+/*
  * Free up the given semaphore set.  This includes cancelling any blocking
  * semop(2) calls on any of its semaphores.
  */
@@ -261,6 +451,8 @@ remove_set(struct sem_struct * sem)
 
 		complete_semop(ip, EIDRM);
 	}
+
+	undo_clear(sem, -1);
 
 	/* Mark the entry as free. */
 	sem->semid_ds.sem_perm.mode &= ~SEM_ALLOC;
@@ -400,6 +592,10 @@ check_set(struct sem_struct * sem)
 
 			if (r != SUSPEND) {
 				/* Success or failure. */
+				if (r == OK)
+					undo_record(ip->ip_endpt, ip->ip_pid,
+					    ip->ip_sem, ip->ip_sops,
+					    ip->ip_nsops);
 				complete_semop(ip, r);
 
 				/* No changes are made on failure. */
@@ -438,10 +634,10 @@ fill_seminfo(struct seminfo * sinfo, int cmd)
 	sinfo->semmap = SEMMNI;
 	sinfo->semmni = SEMMNI;
 	sinfo->semmns = SEMMNI * SEMMSL;
-	sinfo->semmnu = 0; /* TODO: support for SEM_UNDO */
+	sinfo->semmnu = NR_PROCS;	/* one undo structure per process */
 	sinfo->semmsl = SEMMSL;
 	sinfo->semopm = SEMOPM;
-	sinfo->semume = 0; /* TODO: support for SEM_UNDO */
+	sinfo->semume = SEMUME;
 	if (cmd == SEM_INFO) {
 		/*
 		 * For SEM_INFO the semusz field is expected to contain the
@@ -449,7 +645,7 @@ fill_seminfo(struct seminfo * sinfo, int cmd)
 		 */
 		sinfo->semusz = sem_list_nr;
 	} else
-		sinfo->semusz = 0; /* TODO: support for SEM_UNDO */
+		sinfo->semusz = sizeof(struct semundo) * SEMUME;
 	sinfo->semvmx = SEMVMX;
 	if (cmd == SEM_INFO) {
 		/*
@@ -459,7 +655,7 @@ fill_seminfo(struct seminfo * sinfo, int cmd)
 		for (i = 0; i < sem_list_nr; i++)
 			sinfo->semaem += sem_list[i].semid_ds.sem_nsems;
 	} else
-		sinfo->semaem = 0; /* TODO: support for SEM_UNDO */
+		sinfo->semaem = SEMAEM;
 }
 
 /*
@@ -622,6 +818,7 @@ do_semctl(message * m)
 #endif
 		for (i = 0; i < sem->semid_ds.sem_nsems; i++)
 			sem->sems[i].semval = valbuf[i];
+		undo_clear(sem, -1);
 		sem->semid_ds.sem_ctime = clock_time(NULL);
 		/* Awaken any waiting parties if now possible. */
 		check_set(sem);
@@ -633,6 +830,7 @@ do_semctl(message * m)
 		if (val < 0 || val > SEMVMX)
 			return ERANGE;
 		sem->sems[num].semval = val;
+		undo_clear(sem, num);
 #ifdef DEBUG_SEM
 		printf("SEMCTL: SETVAL: %d %d\n", num, val);
 #endif
@@ -722,24 +920,14 @@ do_semop(message * m)
 
 	pid = getnpid(m->m_source);
 
-	/*
-	 * We do not yet support SEM_UNDO at all, so we better not give the
-	 * caller the impression that we do.  For now, print a warning so that
-	 * we know when an application actually fails for that reason.
-	 */
-	for (i = 0; i < nsops; i++) {
-		if (sops[i].sem_flg & SEM_UNDO) {
-			/* Print a warning only if this isn't the test set.. */
-			if (sops[i].sem_flg != SHRT_MAX)
-				printf("IPC: pid %d tried to use SEM_UNDO\n",
-				    pid);
-			r = EINVAL;
-			goto out_free;
-		}
-	}
+	/* Room for the SEM_UNDO adjustments, if any. */
+	if ((r = undo_check(m->m_source, sem, sops, nsops)) != OK)
+		goto out_free;
 
 	/* Try to perform the operation now. */
 	r = try_semop(sem, sops, nsops, pid, &blkop);
+	if (r == OK)
+		undo_record(m->m_source, pid, sem, sops, nsops);
 
 	if (r == SUSPEND) {
 		/*
@@ -873,16 +1061,18 @@ sem_process_event(endpoint_t endpt, int has_exited)
 
 	ip = &iproc[slot];
 
-	/* Was the process blocked on a semop(2) call at all? */
-	if (ip->ip_sem == NULL)
-		return;
-
-	assert(ip->ip_endpt == endpt);
-
 	/*
-	 * It was; cancel the semop(2) call.  If the process is being removed
-	 * because its call was interrupted by a signal, then we must wake it
-	 * up with EINTR.
+	 * If it was blocked on a semop(2) call, cancel the call.  If the
+	 * process is being removed because its call was interrupted by a
+	 * signal, then we must wake it up with EINTR.
 	 */
-	complete_semop(ip, has_exited ? EDONTREPLY : EINTR);
+	if (ip->ip_sem != NULL) {
+		assert(ip->ip_endpt == endpt);
+
+		complete_semop(ip, has_exited ? EDONTREPLY : EINTR);
+	}
+
+	/* On exit, undo its SEM_UNDO operations. */
+	if (has_exited)
+		undo_exit(endpt);
 }

@@ -2296,31 +2296,180 @@ test88c(void)
 }
 
 /*
- * Test SEM_UNDO support.  Right now this functionality is missing altogether.
- * For now, we test that any attempt to use SEM_UNDO fails.
+ * Run semop(2) with 'nsops' operations on semaphore set 'id' in a child
+ * process, which then exits; the call must return 'expect'.  If 'tochild' is
+ * not NULL, the child waits for a byte on that pipe before it exits, and this
+ * function returns once the child's call has completed, so that the parent
+ * can act while the child's adjustments are in place.  undo_wait() reaps it.
+ */
+static void
+undo_child(int id, struct sembuf * sops, size_t nsops, int expect,
+	int * tochild)
+{
+	pid_t pid;
+	char c;
+
+	switch ((pid = fork())) {
+	case -1:
+		e(0);
+		return;
+	case 0:
+		if (semop(id, sops, nsops) != expect)
+			_exit(1);
+		if (tochild != NULL) {
+			if (read(tochild[0], &c, 1) != 1)
+				_exit(2);
+		}
+		_exit(0);
+	default:
+		break;
+	}
+	if (tochild != NULL) {
+		/* Wait until the child has done its semop(). */
+		while (semctl(id, 0, GETPID) != pid)
+			usleep(10000);
+	}
+}
+
+static void
+undo_wait(void)
+{
+	int status;
+
+	if (wait(&status) == -1) e(0);
+	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) e(0);
+}
+
+/*
+ * Test SEM_UNDO support: a process's semop(2) operations with SEM_UNDO are
+ * undone when it exits; SETVAL and SETALL clear the adjustments; and the
+ * per-process limits (seminfo.semume entries, SEMAEM per adjustment) hold.
  */
 static void
 test88d(void)
 {
-	struct sembuf sop;
-	int id;
+	struct seminfo seminfo;
+	struct sembuf sop, *sops;
+	int id, tochild[2];
+	unsigned int i;
 
 	subtest = 3;
 
-	if ((id = semget(IPC_PRIVATE, 1, 0600)) == -1) e(0);
+	if (semctl(0, 0, IPC_INFO, &seminfo) == -1) e(0);
+	if (seminfo.semume < 1) e(0);
+	if (seminfo.semaem < 1) e(0);
 
-	/*
-	 * Use an all-ones (but positive) flag field.  This will include
-	 * SEM_UNDO, but also tell the IPC server to report no warning.
-	 */
-	if (!(SHRT_MAX & SEM_UNDO)) e(0);
+	if ((id = semget(IPC_PRIVATE, 2, 0600)) == -1) e(0);
+
+	/* An increase is undone on exit. */
 	sop.sem_num = 0;
+	sop.sem_op = 2;
+	sop.sem_flg = SEM_UNDO;
+	undo_child(id, &sop, 1, 0, NULL);
+	undo_wait();
+	if (semctl(id, 0, GETVAL) != 0) e(0);
+
+	/* So is a decrease. */
+	if (semctl(id, 0, SETVAL, 5) != 0) e(0);
+	sop.sem_op = -3;
+	undo_child(id, &sop, 1, 0, NULL);
+	undo_wait();
+	if (semctl(id, 0, GETVAL) != 5) e(0);
+
+	/* Operations without SEM_UNDO stay. */
 	sop.sem_op = 1;
-	sop.sem_flg = SHRT_MAX;
-	if (semop(id, &sop, 1) != -1) e(0);
-	if (errno != EINVAL) e(0);
+	sop.sem_flg = 0;
+	undo_child(id, &sop, 1, 0, NULL);
+	undo_wait();
+	if (semctl(id, 0, GETVAL) != 6) e(0);
+
+	/* Several operations, on two semaphores, some cancelling out. */
+	if ((sops = calloc(4, sizeof(*sops))) == NULL) e(0);
+	sops[0].sem_num = 0; sops[0].sem_op = 1; sops[0].sem_flg = SEM_UNDO;
+	sops[1].sem_num = 1; sops[1].sem_op = 4; sops[1].sem_flg = SEM_UNDO;
+	sops[2].sem_num = 0; sops[2].sem_op = -1; sops[2].sem_flg = SEM_UNDO;
+	sops[3].sem_num = 1; sops[3].sem_op = 1; sops[3].sem_flg = 0;
+	undo_child(id, sops, 4, 0, NULL);
+	undo_wait();
+	if (semctl(id, 0, GETVAL) != 6) e(0);
+	if (semctl(id, 1, GETVAL) != 1) e(0);
+	free(sops);
+
+	/* SETVAL clears the adjustment while the child still has it. */
+	if (pipe(tochild) != 0) e(0);
+	if (semctl(id, 0, SETVAL, 0) != 0) e(0);
+	sop.sem_num = 0;
+	sop.sem_op = 3;
+	sop.sem_flg = SEM_UNDO;
+	undo_child(id, &sop, 1, 0, tochild);
+	if (semctl(id, 0, SETVAL, 7) != 0) e(0);
+	if (write(tochild[1], "x", 1) != 1) e(0);
+	undo_wait();
+	if (semctl(id, 0, GETVAL) != 7) e(0);
+
+	/* A call that blocked, and completed later, is undone too. */
+	if (semctl(id, 0, SETVAL, 0) != 0) e(0);
+	sop.sem_op = -1;
+	undo_child(id, &sop, 1, 0, NULL);
+	while (semctl(id, 0, GETNCNT) != 1)
+		usleep(10000);
+	sop.sem_op = 1;
+	sop.sem_flg = 0;
+	if (semop(id, &sop, 1) != 0) e(0);
+	undo_wait();
+	if (semctl(id, 0, GETVAL) != 1) e(0);
+
+	/* The undo is kept within 0..SEMVMX: here 0 - 1 stays 0. */
+	if (semctl(id, 0, SETVAL, 1) != 0) e(0);
+	sop.sem_op = 1;
+	sop.sem_flg = SEM_UNDO;
+	undo_child(id, &sop, 1, 0, tochild);
+	if (semctl(id, 0, GETVAL) != 2) e(0);
+	sop.sem_op = -2;
+	sop.sem_flg = 0;
+	if (semop(id, &sop, 1) != 0) e(0);
+	if (write(tochild[1], "x", 1) != 1) e(0);
+	undo_wait();
+	if (semctl(id, 0, GETVAL) != 0) e(0);
+
+	/* An adjustment beyond SEMAEM fails with ERANGE, changing nothing. */
+	sop.sem_op = seminfo.semaem + 1;
+	sop.sem_flg = SEM_UNDO;
+	if (seminfo.semaem < seminfo.semvmx) {
+		if (semop(id, &sop, 1) != -1) e(0);
+		if (errno != ERANGE) e(0);
+		if (semctl(id, 0, GETVAL) != 0) e(0);
+	}
 
 	if (semctl(id, 0, IPC_RMID) != 0) e(0);
+	(void)close(tochild[0]);
+	(void)close(tochild[1]);
+
+	/* At most seminfo.semume entries per process: ENOSPC beyond that. */
+	if (seminfo.semume < (int)seminfo.semmsl) {
+		if ((id = semget(IPC_PRIVATE, seminfo.semume + 1, 0600)) == -1)
+			e(0);
+		sop.sem_op = 1;
+		sop.sem_flg = SEM_UNDO;
+		for (i = 0; i < (unsigned int)seminfo.semume; i++) {
+			sop.sem_num = i;
+			if (semop(id, &sop, 1) != 0) e(0);
+		}
+		sop.sem_num = i;
+		if (semop(id, &sop, 1) != -1) e(0);
+		if (errno != ENOSPC) e(0);
+		if (semctl(id, i, GETVAL) != 0) e(0);
+		/* Without SEM_UNDO there is no limit. */
+		sop.sem_flg = 0;
+		if (semop(id, &sop, 1) != 0) e(0);
+		/* IPC_RMID drops this process's entries too. */
+		if (semctl(id, 0, IPC_RMID) != 0) e(0);
+		if ((id = semget(IPC_PRIVATE, 1, 0600)) == -1) e(0);
+		sop.sem_num = 0;
+		sop.sem_flg = SEM_UNDO;
+		if (semop(id, &sop, 1) != 0) e(0);
+		if (semctl(id, 0, IPC_RMID) != 0) e(0);
+	}
 }
 
 enum {
