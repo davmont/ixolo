@@ -74,3 +74,4 @@
 ./usr/mdec/boot_monitor                                 minix-base
 ./usr/mdec/bootxx_cd9660                                minix-base
 ./usr/mdec/bootxx_minixfs3                              minix-base
+./usr/mdec/mbr                                          minix-base

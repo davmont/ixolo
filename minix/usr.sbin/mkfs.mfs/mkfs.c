@@ -778,8 +778,28 @@ super(zone_t zones, ino_t inodes)
   mkfs_seek((off_t) SUPER_BLOCK_BYTES, SEEK_SET);
   mkfs_write(buf, SUPER_BLOCK_BYTES);
 
-  /* Clear maps and inodes. */
-  for (i = START_BLOCK; i < initblks; i++) put_block((block_t) i, zero);
+  /* Clear maps and inodes.  Write the zeroes in large chunks rather than one
+   * block at a time: on a multi-GB V4 file system the inode table is tens of
+   * thousands of blocks, and a seek plus a 4 kB write each made setup(8)
+   * spend most of its time here on IDE disks. */
+  {
+	const size_t chunk_blocks = (1024 * 1024) / block_size;
+	char *zchunk;
+	block_t b, n, k;
+
+	if ((zchunk = calloc(chunk_blocks, block_size)) == NULL)
+		err(1, "couldn't allocate a zero buffer");
+	for (b = START_BLOCK; b < (block_t) initblks; b += n) {
+		n = (block_t) initblks - b;
+		if (n > chunk_blocks)
+			n = chunk_blocks;
+		for (k = 0; k < n; k++)
+			(void) read_and_set(b + k);
+		mkfs_seek((uint64_t) b * block_size, SEEK_SET);
+		mkfs_write(zchunk, (size_t) n * block_size);
+	}
+	free(zchunk);
+  }
 
   next_zone = sup->s_firstdatazone;
   next_inode = 1;

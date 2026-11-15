@@ -33,8 +33,17 @@ LDFLAGS+=	-nostdlib -Wl,-e,start
 CPPFLAGS+=	-I. -I${.CURDIR}/../../lib -I${S}
 
 .if ${MACHINE_ARCH} == "x86_64"
-LDFLAGS+=	-Wl,-m,elf_i386
-AFLAGS+=	-m32
+# Cross-building the 16/32-bit MBR code from the amd64 tree.  As in
+# bootxx/Makefile.bootxx: target i586 (-m32 alone is ignored by the amd64
+# clang wrapper), link statically at address 0 (the wrapper adds
+# --image-base=0x400000 and a PT_INTERP otherwise; MBR_LDFLAGS goes after
+# LDFLAGS so it wins), and use clang's integrated assembler, since there is
+# no GNU as behind -no-integrated-as.
+LDFLAGS+=	-static -Wl,-m,elf_i386
+MBR_LDFLAGS=	-Wl,--image-base=0
+AFLAGS+=	--target=i586-elf32-minix
+MBR_INTEGRATED_AS=	yes
+AFLAGS.gptmbr.S=	# gptmbr/Makefile sets -no-integrated-as before including us
 .endif
 
 BUILDSYMLINKS+=	$S/arch/i386/include	machine \
@@ -46,8 +55,10 @@ CLEANFILES+=	${PROG}.tmp
 
 LOADADDR=	0x8800
 
+.if !defined(MBR_INTEGRATED_AS)
 AFLAGS.mbr.S= ${${ACTIVE_CC} == "clang":?-no-integrated-as:}
 AFLAGS.gpt.S= ${${ACTIVE_CC} == "clang":?-no-integrated-as:}
+.endif
 
 .if defined(__MINIX)
 CPPFLAGS+= -DLOADADDR=${LOADADDR}
@@ -56,7 +67,7 @@ CPPFLAGS+= -DLOADADDR=${LOADADDR}
 ${PROG}: ${OBJS}
 	${_MKTARGET_LINK}
 .if defined(__MINIX)
-	${CC} -o ${PROG}.tmp ${LDFLAGS} -Wl,--section-start=.text=${LOADADDR} ${OBJS}
+	${CC} -o ${PROG}.tmp ${LDFLAGS} ${MBR_LDFLAGS} -Wl,--section-start=.text=${LOADADDR} ${OBJS}
 .else
 	${CC} -o ${PROG}.tmp ${LDFLAGS} -Wl,-Ttext,${LOADADDR} ${OBJS}
 .endif # defined(__MINIX)

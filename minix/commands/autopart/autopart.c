@@ -1809,7 +1809,7 @@ prettysizeprint(int kb)
 		}
 	}
 	sprintf(str, "%4d %cB%s", kb, unit,
-		toosmall ? ", too small for MINIX 3" : "");
+		toosmall ? ", too small for " DISTRO_NAME : "");
 	return str;
 }
 
@@ -1951,8 +1951,8 @@ select_region(void)
 	}
 
 
-	printf("\nPlease select the region that you want to use for the MINIX 3 setup.");
-	printf("\nIf you select an in-use region it will be overwritten by MINIX. The");
+	printf("\nPlease select the region that you want to use for the " DISTRO_NAME " setup.");
+	printf("\nIf you select an in-use region it will be overwritten by " DISTRO_NAME ". The");
 	printf("\nfollowing region%s were found on the selected disk:\n\n",
 		SORNOT(nr_regions));
 	printregions(regions, 3, nr_partitions, free_regions, nr_regions, 1);
@@ -2015,7 +2015,7 @@ select_disk(void)
 	static char line[500];
 	int biosdrive = 0;
 
-	printstep(1, "Select a disk to install MINIX 3");
+	printstep(1, "Select a disk to install " DISTRO_NAME);
 	printf("\nProbing for disks. This may take a short while.");
 
 		i = 0;
@@ -2204,10 +2204,10 @@ do_autopart(int resultfd)
 		region =  (int)(r-regions); 
 		/* disk = (int) (curdev-devices); */
 
-		printf("\nThis is the point of no return.  You have selected to install MINIX 3\n");
+		printf("\nThis is the point of no return.  You have selected to install " DISTRO_NAME "\n");
 		printf("into region %d of disk %s.  Please confirm that you want\n",
 			region, curdev->name);
-		printf("to use this selection to install MINIX 3.\n\n");
+		printf("to use this selection to install " DISTRO_NAME ".\n\n");
 
 		do {
 			confirmation = is_sure("Are you sure you want to continue?");

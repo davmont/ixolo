@@ -203,6 +203,14 @@ main(int argc, char *argv[])
 	if (params->machine == NULL) {
 		if (uname(&utsname) == -1)
 			err(1, "Determine uname");
+#if defined(__minix)
+		/* MINIX on amd64 calls its machine x86_64, and boots from disk
+		 * with the i386 BIOS boot blocks, the only ones built here.
+		 */
+		if (strcmp(utsname.machine, "x86_64") == 0)
+			getmachine(params, "i386", "uname()");
+		else
+#endif
 		getmachine(params, utsname.machine, "uname()");
 	}
 
