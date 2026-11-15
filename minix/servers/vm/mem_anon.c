@@ -102,6 +102,16 @@ static int anon_pagefault(struct vmproc *vmp, struct vir_region *region,
 
 	assert(ph->ph->refcount > 0);
 
+	/* Already present, and either only read or not shared: there is
+	 * nothing to do, and no page to allocate.  This is the common case
+	 * for calls that only make sure memory is there -- VFS does that for
+	 * every buffer it hands to a driver that also serves a file system --
+	 * and allocating a page first, as this function used to, leaked one
+	 * page per page of such a buffer on every call.
+	 */
+	if(ph->ph->phys != MAP_NONE && (ph->ph->refcount < 2 || !write))
+		return OK;
+
 	if((new_page_cl = alloc_mem(1, allocflags)) == NO_MEM) {
 		printf("anon_pagefault: out of memory\n");
 		return ENOMEM;
@@ -168,11 +178,6 @@ static int anon_pagefault(struct vmproc *vmp, struct vir_region *region,
 
 		return OK;
 	}
-
-	if(ph->ph->refcount < 2 || !write) {
-		/* memory is ready already */
-		return OK;
-	}	
 
         assert(region->flags & VR_WRITABLE);
 
