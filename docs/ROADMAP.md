@@ -220,9 +220,13 @@ writes at 12–15 MB/s. The cause hasn't been investigated. The ramdisk boots
 `at_wini` with `ata_no_dma=1`, so PIO with an interrupt per sector is the first
 suspect.
 
-**Booting the ISO with 4 GB of RAM on `-machine q35` stopped once** after
-`BSP-pre-switch_to_user`. It happened while another VM was running on the
-same host, and hasn't been reproduced yet.
+**Intermittent stall at boot under host load.** Booting with `-smp 2`
+under KVM sometimes stops after the kernel's `BSP-pre-switch_to_user`
+marker, before any server runs. It happened twice in November 2026, both
+times while the host was busy (a parallel build, or another VM); the same ISO
+boots in about 30 s on an idle host. `qemutest.py` already retries boots
+(`--boot-retries`) because of a similar stall under TCG. Running the stalled
+guest again with `--kernel` to sample the registers would show where it spins.
 
 **`hw.ncpu` reports 8 with `-smp 2`.** The CPU count in sysctl doesn't
 match the number of CPUs started.
