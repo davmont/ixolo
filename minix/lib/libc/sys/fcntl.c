@@ -24,6 +24,8 @@ int _sys_fcntl(int fd, int cmd, ...)
   switch(cmd) {
      case F_DUPFD:
      case F_DUPFD_CLOEXEC:
+     case F_DUP2FD:
+     case F_DUP2FD_CLOEXEC:
      case F_SETFD:
      case F_SETFL:
      case F_SETNOSIGPIPE:
