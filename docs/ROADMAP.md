@@ -239,6 +239,15 @@ boots in about 30 s on an idle host. `qemutest.py` already retries boots
 (`--boot-retries`) because of a similar stall under TCG. Running the stalled
 guest again with `--kernel` to sample the registers would show where it spins.
 
+**The CD root mount can fail with "non-contiguous memory".** Once, on a
+`q35` boot with four extra disks attached, AHCI refused an isofs transfer
+(`AHCI0-D2: non-contiguous memory from <isofs>`) and `/dev/c0d2` couldn't be
+mounted as root. The same ISO booted normally the next time. A buffer that
+isofs hands the driver for one transfer isn't physically contiguous, and the
+driver's DMA setup requires each vector element to be. Either the driver
+should split such an element into several PRD entries, or the file system
+should allocate its buffers contiguously.
+
 **`hw.ncpu` reports 8 with `-smp 2`.** The CPU count in sysctl doesn't
 match the number of CPUs started.
 
