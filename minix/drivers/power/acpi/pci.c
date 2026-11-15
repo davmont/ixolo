@@ -178,23 +178,35 @@ static ACPI_STATUS get_pci_irq_routing(struct pci_bridge * bridge)
 {
 	ACPI_STATUS status;
 	ACPI_BUFFER abuff;
-	char buff[4096];
 	ACPI_PCI_ROUTING_TABLE *tbl;
 	ACPI_DEVICE_INFO *info;
 	int i;
 
-	abuff.Length = sizeof(buff);
-	abuff.Pointer = buff;
+	/* Let ACPICA size the buffer.  A fixed 4 KB one was too small for the
+	 * _PRT of a bus with 32 slots (QEMU's q35 has 128 entries): the call
+	 * failed with AE_BUFFER_OVERFLOW, no routing was recorded, and every
+	 * PCI device kept the IRQ the BIOS had set up for the 8259.  In APIC
+	 * mode such an IRQ (below 16) is programmed edge-triggered, while the
+	 * device's interrupt is level-triggered, so interrupts got lost --
+	 * AHCI timed out whenever two ports were busy at once.
+	 */
+	abuff.Length = ACPI_ALLOCATE_BUFFER;
+	abuff.Pointer = NULL;
 
 	status = AcpiGetIrqRoutingTable(bridge->handle, &abuff);
 	if (ACPI_FAILURE(status)) {
+		/* No _PRT here is normal; anything else is worth knowing. */
+		if (status != AE_NOT_FOUND)
+			printf("ACPI: cannot read a PCI IRQ routing table: %s\n",
+			    AcpiFormatException(status));
 		return AE_OK;
 	}
 
-	info = abuff.Pointer;
 	status = AcpiGetObjectInfo(bridge->handle, &info);
-	if (ACPI_FAILURE(status))
+	if (ACPI_FAILURE(status)) {
+		ACPI_FREE(abuff.Pointer);
 		return status;
+	}
 	/*
 	 * Decode the device number (upper half of the address) and attach the
 	 * new bridge in the children list of its parent
@@ -236,6 +248,8 @@ static ACPI_STATUS get_pci_irq_routing(struct pci_bridge * bridge)
 		}
 	}
 
+	ACPI_FREE(info);
+	ACPI_FREE(abuff.Pointer);
 	return AE_OK;
 }
 
@@ -253,8 +267,6 @@ static ACPI_STATUS add_pci_dev(ACPI_HANDLE handle,
 				void **retval)
 {
 	ACPI_STATUS status;
-	ACPI_BUFFER abuff;
-	char buff[4096];
 	ACPI_HANDLE parent_handle;
 	struct pci_bridge * bridge;
 	struct pci_bridge * parent_bridge = (struct pci_bridge *) context;
@@ -270,9 +282,6 @@ static ACPI_STATUS add_pci_dev(ACPI_HANDLE handle,
 	/* skip devices that have a different parent */
 	if (parent_handle != parent_bridge->handle)
 		return AE_OK;
-
-	abuff.Length = sizeof(buff);
-	abuff.Pointer = buff;
 
 	bridge = malloc(sizeof(struct pci_bridge));
 	if (!bridge)
