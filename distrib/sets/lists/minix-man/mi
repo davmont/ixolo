@@ -448,6 +448,9 @@
 ./usr/man/man1/who.1                                    minix-man
 ./usr/man/man1/whoami.1                                 minix-man
 ./usr/man/man1/whois.1                                  minix-man
+./usr/man/man1/wlclient.1                               minix-man
+./usr/man/man1/wlcoreprobe.1                            minix-man
+./usr/man/man1/wlprobe.1                                minix-man
 ./usr/man/man1/worldstone.1                             minix-man
 ./usr/man/man1/write.1                                  minix-man
 ./usr/man/man1/xargs.1                                  minix-man
@@ -4063,6 +4066,7 @@
 ./usr/man/man8/dnssec-settime.8                         minix-man
 ./usr/man/man8/dnssec-signzone.8                        minix-man
 ./usr/man/man8/dnssec-verify.8                          minix-man
+./usr/man/man8/fbcompd.8                                minix-man
 ./usr/man/man8/fbdctl.8                                 minix-man
 ./usr/man/man8/fdisk.8                                  minix-man
 ./usr/man/man8/fingerd.8                                minix-man
@@ -4202,6 +4206,7 @@
 ./usr/man/man8/virecover.8                              minix-man
 ./usr/man/man8/vnconfig.8                               minix-man
 ./usr/man/man8/vndconfig.8                              minix-man
+./usr/man/man8/wlcompd.8                                minix-man
 ./usr/man/man8/zdump.8                                  minix-man
 ./usr/man/man8/zic.8                                    minix-man
 ./usr/man/man9                                          minix-man

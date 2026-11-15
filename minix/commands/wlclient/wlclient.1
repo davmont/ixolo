@@ -1,0 +1,152 @@
+.Dd November 15, 2026
+.Dt WLCLIENT 1
+.Os
+.Sh NAME
+.Nm wlclient
+.Nd Wayland test client and end-to-end check
+.Sh SYNOPSIS
+.Nm
+.Op Ar seconds Op Cm panel | Cm workspace
+.Sh DESCRIPTION
+The
+.Nm
+utility is a small Wayland client.
+It checks that the Wayland stack works from end to end:
+the connection to the compositor, shared-memory buffers passed as file
+descriptors, the keymap, and the shell protocols.
+It is meant to be run against
+.Xr wlcompd 8 .
+.Pp
+.Nm
+connects to the compositor, lists the globals it offers, and then runs
+one of three tests.
+It reports each step on standard output.
+.Pp
+The
+.Ar seconds
+argument is a whole number of seconds.
+If it is missing or zero, the default test exits as soon as it is done.
+To give a mode, a
+.Ar seconds
+value must come first.
+An unknown mode runs the default test.
+.Ss Default test
+.Nm
+opens a toplevel window titled
+.Dq wlclient
+and waits to be configured.
+It then draws a test pattern into a shared-memory buffer and commits it.
+The pattern is an orange border with a white diagonal on a blue field.
+.Nm
+prints a checksum of the pixels in each frame.
+.Xr wlcompd 8
+prints the checksum of what it received, so the two can be compared.
+.Pp
+.Nm
+also binds a keyboard and checks that the keymap it is sent is XKB text.
+It adds a 64 by 48 subsurface at offset 24,24, a 120 by 80 popup, and a
+16 by 16 green cursor that it sets when the pointer enters its surface.
+.Pp
+If
+.Ar seconds
+is greater than zero,
+.Nm
+then stays connected for that long.
+When the compositor asks for a new size,
+.Nm
+draws a new frame at that size, growing its shared-memory pool if needed.
+Key events are printed as they arrive.
+.Ss Panel test
+With
+.Cm panel ,
+.Nm
+creates a layer-shell surface in the top layer, named
+.Dq wlpanel .
+It is anchored to the left, right and bottom edges, 28 pixels high, with
+an exclusive zone of 28 pixels.
+.Nm
+waits to be configured, fills the surface with a single colour, and stays
+for
+.Ar seconds
+seconds, or 5 seconds if
+.Ar seconds
+is zero.
+The test passes if the compositor gives the panel a width and a height of
+28 pixels.
+.Ss Workspace test
+With
+.Cm workspace ,
+.Nm
+first runs the default test up to the popup.
+It then lists the virtual desktops offered through ext-workspace,
+switches to desktop 1, waits a second, switches back to desktop 0 and
+waits another second.
+The test passes if there are exactly four desktops and desktop 0 is
+active at the end.
+.Ar seconds
+is ignored in this mode.
+.Pp
+Each test ends by printing
+.Dq ALL PASS
+or a failure message.
+If the compositor asks
+.Nm
+to close its window or its panel, it exits at once.
+.Sh ENVIRONMENT
+.Bl -tag -width XDG_RUNTIME_DIR
+.It Ev XDG_RUNTIME_DIR
+The directory that holds the compositor's socket.
+.It Ev WAYLAND_DISPLAY
+The name of the socket in that directory.
+The default is
+.Pa wayland-0 .
+.El
+.Sh EXIT STATUS
+.Nm
+exits 0 if the test passed, and 1 otherwise.
+.Pp
+The default test passes if a frame was drawn and, when a keyboard is
+available, a valid keymap was received.
+.Nm
+also exits 1 if it cannot connect, if a required global is missing, or
+if it is never configured.
+If the compositor asks it to close,
+.Nm
+exits 0.
+.Sh EXAMPLES
+Check the stack, then serve resizes for 30 seconds:
+.Bd -literal -offset indent
+$ wlclient 30
+.Ed
+.Pp
+Check that a panel docks to the bottom edge:
+.Bd -literal -offset indent
+$ wlclient 10 panel
+.Ed
+.Pp
+Check virtual desktop switching:
+.Bd -literal -offset indent
+$ wlclient 0 workspace
+.Ed
+.Sh SEE ALSO
+.Xr wlcoreprobe 1 ,
+.Xr wlprobe 1 ,
+.Xr shm_open 3 ,
+.Xr fbcompd 8 ,
+.Xr wlcompd 8
+.Sh HISTORY
+The
+.Nm
+utility first appeared in Ixolo 0.1.
+.Sh BUGS
+In the default test,
+.Nm
+waits for events from the compositor.
+If none arrive, it can stay running past
+.Ar seconds .
+.Pp
+The workspace test does not check that the switch to desktop 1 took
+effect.
+.Pp
+Whether the compositor released the buffer is printed but does not
+change the exit status.

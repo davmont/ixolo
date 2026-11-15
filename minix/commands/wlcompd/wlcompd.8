@@ -1,0 +1,245 @@
+.Dd November 15, 2026
+.Dt WLCOMPD 8
+.Os
+.Sh NAME
+.Nm wlcompd
+.Nd Wayland compositor for the framebuffer
+.Sh SYNOPSIS
+.Nm
+.Op Ar font
+.Sh DESCRIPTION
+The
+.Nm
+daemon is the Wayland compositor of Ixolo.
+It draws on the framebuffer
+.Pa /dev/fb0
+and takes input from the keyboard and the mouse.
+Wayland clients connect to it over a
+.Ux Ns -domain
+socket and hand it their pixels in shared memory.
+.Pp
+The optional
+.Ar font
+argument is the path of a TrueType font used for window titles.
+The default is
+.Pa /usr/share/fonts/TTF/DejaVuSans.ttf .
+If the font cannot be loaded,
+.Nm
+prints a warning and runs without title text.
+.Pp
+.Nm
+does not detach from the terminal.
+It runs until it is killed.
+.Ss Protocols
+.Nm
+implements these Wayland globals:
+.Bl -tag -width Ds
+.It Li wl_compositor , wl_subcompositor , wl_shm
+Surfaces, subsurfaces and shared-memory buffers.
+Only
+.Li wl_shm
+buffers are accepted.
+A buffer may be at most 4096 by 4096 pixels.
+.It Li wl_seat
+One seat, named
+.Dq minix-seat0 ,
+with a pointer and a keyboard.
+.It Li wl_output
+One output, the size of the framebuffer, at a refresh rate of 60 Hz.
+Its make is
+.Dq Ixolo
+and its model is
+.Dq fb0 .
+.It Li wl_data_device_manager
+Accepted, but see
+.Sx BUGS .
+.It Li xdg_wm_base
+Toplevel windows and popups (xdg-shell).
+.It Li zwlr_layer_shell_v1
+Panels, docks and backgrounds that anchor to an edge of the screen.
+.It Li zwlr_foreign_toplevel_manager_v1
+Lets a taskbar list, activate, minimize, maximize and close windows.
+.It Li ext_workspace_manager_v1
+Lets a pager list and switch virtual desktops.
+.It Li zxdg_decoration_manager_v1
+Every request is answered with server-side decorations.
+.El
+.Ss Windows
+.Nm
+draws a title bar above each toplevel window.
+The title bar shows the window title and a close box marked
+.Sq x
+at its right end.
+A small resize grip is drawn in the bottom-right corner of the window.
+.Pp
+New windows open at staggered positions near the top-left corner.
+A window that is nearly as large as the screen is moved so that its
+title bar stays on screen.
+.Ss Mouse
+Only the left mouse button is used.
+.Bl -bullet
+.It
+A click on a window raises it and gives it keyboard focus.
+.It
+Dragging the title bar moves the window.
+.It
+A click on the close box asks the client to close the window.
+The client may refuse.
+.It
+Dragging the resize grip asks the client to resize the window.
+The smallest size is 80 by 48 pixels.
+.It
+A click anywhere outside an open popup dismisses the popup.
+.It
+A click on a layer-shell surface that asked for keyboard interactivity
+gives it keyboard focus.
+.El
+.Pp
+If a client does not set its own cursor,
+.Nm
+draws a white arrow.
+.Ss Keyboard
+Every key is passed to the window that has keyboard focus.
+.Nm
+has no keyboard shortcuts of its own.
+Keys are translated with the XKB keymap in
+.Pa /usr/share/xkb/us.xkb ,
+which is also sent to each client.
+If the keymap cannot be loaded, clients are told there is no keymap.
+Clients are told to repeat keys 25 times a second after a delay of
+400 milliseconds.
+.Ss Virtual desktops
+There are four virtual desktops, named
+.Dq 1
+to
+.Dq 4 .
+A new window opens on the current desktop.
+Panels and other layer-shell surfaces appear on every desktop.
+Desktops can only be switched by a client, such as a panel pager,
+through the ext-workspace protocol.
+Clients cannot create or remove desktops.
+.Sh ENVIRONMENT
+.Bl -tag -width XDG_RUNTIME_DIR
+.It Ev XDG_RUNTIME_DIR
+The directory in which the listening socket is created.
+It must be set to an absolute path, or
+.Nm
+exits.
+.El
+.Pp
+.Nm
+creates the first free socket named
+.Pa wayland-0
+to
+.Pa wayland-32
+in that directory, with a
+.Pa .lock
+file beside it.
+The chosen name is printed when the compositor is ready.
+Clients find it through
+.Ev WAYLAND_DISPLAY ,
+which defaults to
+.Pa wayland-0 .
+.Nm
+does not set
+.Ev WAYLAND_DISPLAY
+itself.
+.Sh FILES
+.Bl -tag -width /usr/share/fonts/TTF/DejaVuSans.ttf -compact
+.It Pa /dev/fb0
+The framebuffer.
+.It Pa /dev/kbdmux
+The keyboard.
+.Pa /dev/kbd0
+is tried if it cannot be opened.
+.It Pa /dev/mousemux
+The mouse.
+.Pa /dev/mouse0
+is tried if it cannot be opened.
+.It Pa /usr/share/xkb/us.xkb
+The keyboard map.
+.It Pa /usr/share/fonts/TTF/DejaVuSans.ttf
+The default title font.
+.It Pa /tmp/wlcompd-keymap. Ns Ar XXXXXX
+A copy of the keymap, passed to clients as a file descriptor.
+It is unlinked as soon as it is created.
+.It Pa /etc/rc.d/wlcompd
+Starts
+.Nm
+at boot when
+.Va wlcompd
+is set to
+.Dq YES
+in
+.Xr rc.conf 5 .
+The script sets
+.Ev XDG_RUNTIME_DIR
+to
+.Pa /var/run
+if it is unset, and records the process ID in
+.Pa /var/run/wlcompd.pid .
+.It Pa /var/log/wlcompd.log
+Where the boot script sends the output of
+.Nm .
+.El
+.Sh EXIT STATUS
+.Nm
+exits 1 if it cannot open the framebuffer, set up the Wayland display or
+create its listening socket.
+Once it is running it does not exit by itself.
+.Sh DIAGNOSTICS
+.Nm
+logs its activity to standard output.
+When start-up is complete it prints a line beginning with
+.Dq WLCOMPD READY ,
+which gives the framebuffer size, the socket name and whether a mouse,
+a keyboard and a keymap were found.
+For every committed buffer it prints a checksum of the pixels;
+.Xr wlclient 1
+prints the matching checksum on its side.
+.Sh SEE ALSO
+.Xr wlclient 1 ,
+.Xr wlcoreprobe 1 ,
+.Xr wlprobe 1 ,
+.Xr rc.conf 5 ,
+.Xr fbcompd 8 ,
+.Xr minix-service 8
+.Sh HISTORY
+The
+.Nm
+daemon first appeared in Ixolo 0.1.
+.Sh CAVEATS
+.Nm
+and
+.Xr fbcompd 8
+must not run at the same time.
+Both use the framebuffer and the keyboard.
+.Pp
+While
+.Nm
+holds
+.Pa /dev/kbdmux ,
+the console no longer receives keyboard input.
+.Sh BUGS
+Only the left mouse button is reported to clients.
+There are no scroll wheel and no touch events.
+.Pp
+The clipboard owner is recorded, but other clients are never offered
+the data, so paste between clients does not work.
+Drag and drop is accepted and ignored.
+.Pp
+Requests from a client to maximize, minimize or fullscreen its own
+window are ignored.
+A window can be maximized or minimized only through
+.Li zwlr_foreign_toplevel_manager_v1 .
+Fullscreen through that protocol is treated as maximize.
+.Pp
+Windows cannot be moved to another virtual desktop.
+.Pp
+The exclusive zone of a panel is recorded but not applied:
+windows may sit underneath a panel.
+.Pp
+Popup constraint adjustment, input regions and opaque regions are
+ignored.
+.Pp
+Window titles are cut to 63 bytes.

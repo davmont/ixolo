@@ -8,7 +8,7 @@
 .include "${NETBSDSRCDIR}/external/mit/wayland/Makefile.inc"
 
 PROG=	wlclient
-MAN=
+MAN=	wlclient.1
 
 SRCS=	wlclient.c xdg-shell-protocol.c wlr-layer-shell-protocol.c \
 	ext-workspace-protocol.c

@@ -1,4 +1,4 @@
 PROG=	wlprobe
-MAN=
+MAN=	wlprobe.1
 
 .include <bsd.prog.mk>
