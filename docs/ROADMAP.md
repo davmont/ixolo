@@ -61,6 +61,17 @@ filter, so any service can make any POSIX call.
 of `arch/i386`, and most of it (page tables, interrupt setup, the APIC and
 ACPI code) is still the same. Move the shared code into `arch/x86`.
 
+**Honour the MADT interrupt source overrides.** In APIC mode the kernel
+programs every IRQ below 16 as ISA, edge-triggered and active-high
+(`set_irq_redir_low()` in `minix/kernel/arch/x86_64/apic.c`), and it doesn't
+read the ACPI MADT's interrupt source overrides. A PCI device whose
+interrupt is routed below 16 is level-triggered, so it can lose interrupts
+whenever its line stays asserted across the handler. On QEMU's `q35` machine
+the PCI interrupts are routed to GSIs 16–23 and this doesn't arise, once
+the ACPI service reads the whole routing table. On the `pc` (PIIX) machine
+they are routed to IRQs 5, 9, 10 and 11, which the MADT marks level-triggered,
+and the network card is on one of them.
+
 **Single-image boot.** Put the kernel and boot modules in one file with the
 parameters built in. That allows PXE boot and large RAM disks, and removes the
 duplicate module lists in `boot.cfg`, GRUB's configuration and the release
