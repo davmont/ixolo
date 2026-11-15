@@ -1224,6 +1224,13 @@ typedef struct {
 _ASSERT_MSG_SIZE(mess_lc_vfs_umask);
 
 typedef struct {
+	int callnr;		/* VFS_SELECT or VFS_ACCEPT; 0 disarms */
+
+	uint8_t padding[52];
+} mess_lc_vfs_sigarm;
+_ASSERT_MSG_SIZE(mess_lc_vfs_sigarm);
+
+typedef struct {
 	vir_bytes name;
 	size_t namelen;
 	vir_bytes label;
@@ -3016,6 +3023,7 @@ typedef struct noxfer_message {
 		mess_lc_vfs_kqueue	m_lc_vfs_kqueue;
 		mess_lc_vfs_kevent	m_lc_vfs_kevent;
 		mess_lc_vfs_umask	m_lc_vfs_umask;
+		mess_lc_vfs_sigarm	m_lc_vfs_sigarm;
 		mess_lc_vfs_umount	m_lc_vfs_umount;
 		mess_lc_vm_brk		m_lc_vm_brk;
 		mess_lc_vm_rlimit	m_lc_vm_rlimit;

@@ -506,7 +506,12 @@ void unpause(int restart)
   int blocked_on, status = EINTR;
   int wasreviving = 0;
 
-  if (!fp_is_blocked(fp)) return;
+  if (!fp_is_blocked(fp)) {
+	/* Between the calls of a pselect(2) and the like: see do_sigarm(). */
+	if (fp->fp_flags & FP_SIGARM)
+		fp->fp_flags |= FP_SIGARM_INTR;
+	return;
+  }
   blocked_on = fp->fp_blocked_on;
 
   /* Applied in reply(), so that it covers the replies sent by the cancel

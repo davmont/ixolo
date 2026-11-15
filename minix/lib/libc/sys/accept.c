@@ -183,9 +183,12 @@ int accept4(int sock, struct sockaddr *__restrict address,
 
 /*
  * NetBSD's paccept(2): accept4(2) with the signal mask set to 'sigmask' for
- * the call.  As in pselect(2) here, swapping the mask and the call are not
- * one atomic step.
+ * the call.  As in pselect(2), the call is armed first, so that a signal
+ * caught between installing the mask and the call makes it fail with EINTR
+ * rather than block.
  */
+void __minix_sigarm(int);
+
 int paccept(int sock, struct sockaddr *__restrict address,
 	socklen_t *__restrict address_len, const sigset_t *__restrict sigmask,
 	int flags)
@@ -196,8 +199,11 @@ int paccept(int sock, struct sockaddr *__restrict address,
 	if (sigmask == NULL)
 		return accept4(sock, address, address_len, flags);
 
-	if (sigprocmask(SIG_SETMASK, sigmask, &omask) != 0)
+	__minix_sigarm(VFS_ACCEPT);
+	if (sigprocmask(SIG_SETMASK, sigmask, &omask) != 0) {
+		__minix_sigarm(0);
 		return -1;
+	}
 
 	r = accept4(sock, address, address_len, flags);
 

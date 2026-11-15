@@ -126,6 +126,7 @@ void thread_cleanup(void);
 /* misc.c */
 void pm_exit(void);
 int do_fcntl(void);
+int do_sigarm(void);
 int do_flock(void);
 int do_fallocate(void);
 void pm_fork(endpoint_t pproc, endpoint_t cproc, pid_t cpid);
