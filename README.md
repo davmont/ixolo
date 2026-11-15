@@ -232,8 +232,8 @@ first boot and what to configure afterwards, is
 **[Install to disk](https://www.ixolo.org/en/docs/start/install/)** on the
 website. In short:
 
-1. Create a VM with a 2 GB or larger disk and boot the ISO (in QEMU, use
-   `-cpu host` for amd64).
+1. Create a VM with a 2 GB or larger disk and boot the ISO. In QEMU, use
+   `-machine q35 -cpu host`: the default `pc` machine's IDE disk is very slow.
 2. Log in as `root` (no password).
 3. Run `setup` and follow the prompts.
 4. Power off, remove the ISO, reboot.
