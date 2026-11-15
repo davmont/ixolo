@@ -227,17 +227,18 @@ qemu-system-x86_64 --enable-kvm -cpu host -m 256 -hda minix_amd64.img
 
 ### Installation (from ISO)
 
-1. Create a VM (256 MB RAM, 2 GB+ HDD).
-2. Mount the ISO and boot (use `-cpu host` for amd64 in QEMU).
-3. Log in as `root` (no password).
-4. Run `setup` and follow the prompts.
-5. Power off, remove the ISO, reboot.
-6. To start the desktop on an image built with it, log in and run
-   `startlxqt`.
+The full guide, covering hardware requirements, every `setup` prompt, the
+first boot and what to configure afterwards, is
+**[Install to disk](https://www.ixolo.org/en/docs/start/install/)** on the
+website. In short:
 
-The installer is the MINIX 3 one with Ixolo's changes, so the
-[MINIX 3 Installation Guide](https://wiki.minix3.org/doku.php?id=usersguide:doinginstallation)
-still describes it well.
+1. Create a VM with a 2 GB or larger disk and boot the ISO. In QEMU, use
+   `-machine q35 -cpu host`: the default `pc` machine's IDE disk is very slow.
+2. Log in as `root` (no password).
+3. Run `setup` and follow the prompts.
+4. Power off, remove the ISO, reboot.
+5. To start the desktop on an image built with it, log in and run
+   `startlxqt`.
 
 ---
 
@@ -254,11 +255,11 @@ In this repository:
 - [`docs/UEFI_BOOT.md`](docs/UEFI_BOOT.md): UEFI and GPT boot
 - [`docs/THIRD_PARTY.md`](docs/THIRD_PARTY.md): third-party code and how to update it
 
-Inherited from MINIX 3, still accurate for the kernel, servers and most of the
-userland:
+The legacy MINIX 3 project, for historical reference only. It is no longer
+developed and does not document Ixolo, but its design material still describes
+the kernel and servers Ixolo inherited:
 
-- [MINIX 3 Wiki](https://wiki.minix3.org) and its
-  [User Guide](https://wiki.minix3.org/doku.php?id=www:getting-started:start)
+- [MINIX 3 Wiki](https://wiki.minix3.org) (archive of the upstream project)
 - *Operating Systems: Design and Implementation* (3rd ed.), Tanenbaum & Woodhull
 
 ---
