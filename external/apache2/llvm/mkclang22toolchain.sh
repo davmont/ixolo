@@ -30,6 +30,12 @@
 #    DIRECTLY and honours -nodefaultlibs -- whereas its Minix driver delegates the
 #    link to "gcc" and drops -nodefaultlibs, which pulls host libc / breaks the
 #    libminc-only MINIX servers.
+#  * The NetBSD driver names /libexec/ld.elf_so as the program interpreter;
+#    MINIX installs it as /usr/libexec/ld.elf_so (the in-tree clang's Minix
+#    driver says so).  A dynamic executable is therefore linked with
+#    --dynamic-linker=/usr/libexec/ld.elf_so, or it fails to exec on the target
+#    ("not found").  Only a dynamic executable: given that option, lld adds a
+#    PT_INTERP even to a -static link, and the program would then need it.
 #  * -B<self> finds the in-tree binutils; -B<destdir>/usr/lib makes
 #    `clang --print-file-name=crtbeginS.o` resolve (the in-tree clang baked that
 #    path in; stock clang does not).
@@ -93,7 +99,7 @@ case "\${0##*/}" in
 *clang-cpp) mode=--driver-mode=cpp ;;
 *)          mode= ;;
 esac
-islink=yes; hassr=no; sr=; nostdinccxx=no
+islink=yes; hassr=no; sr=; nostdinccxx=no; dynexe=yes
 for a in "\$@"; do
 	case "\$a" in
 	-c|-S|-E|-fsyntax-only|-M|-MM|-dM|-dumpmachine|--version) islink=no ;;
@@ -101,12 +107,15 @@ for a in "\$@"; do
 	*.c|*.cc|*.cpp|*.cxx|*.C|*.s|*.S|*.i|*.ii|*.m|*.mm) islink=no ;;
 	--sysroot=*) sr=\${a#--sysroot=}; hassr=yes ;;
 	-nostdinc++) nostdinccxx=yes ;;
+	-static|-shared|-r|-Wl,-r|-Wl,-shared|-Wl,-Bshareable) dynexe=no ;;
 	esac
 done
 sysroot=
 [ "\$hassr" = no ] && { sysroot="--sysroot=\${DESTROOT}"; sr=\${DESTROOT}; }
 if [ "\$islink" = yes ]; then
-	exec "\$HOSTCLANG" \${mode} --target=x86_64-unknown-netbsd \\
+	dl=
+	[ "\$dynexe" = yes ] && dl=-Wl,--dynamic-linker=/usr/libexec/ld.elf_so
+	exec "\$HOSTCLANG" \${mode} --target=x86_64-unknown-netbsd \${dl} \\
 		-B"\${SELF}" -B"\${DESTROOT}/usr/lib" \${sysroot} "\$@"
 fi
 cxxinc=
