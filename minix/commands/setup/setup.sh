@@ -28,7 +28,7 @@ fi
 
 #LSC: Slight over shoot, as files for / are taken into account, although
 #     metadata is not, all in all should be pretty accurate.
-USRKB=$(cat "$SETS_DIR"/*.size | awk '{s+=$1} END{print (s/1024)}')
+USRKB=$(cat "$SETS_DIR"/*.size | awk '{s+=$1} END{printf "%d\n", s/1024}')
 TOTALMB="`expr 3 + $USRKB / 1024 + $ROOTMB`"
 TOTALFILES="`find -x / | wc -l`"
 
@@ -330,7 +330,10 @@ then	echo "Note: you can't have /home with that size partition."
 fi
 
 TMPMP=/mnt
-mkdir $TMPMP >/dev/null 2>&1
+# On the CD /mnt already exists (and / is read-only): remove the directory
+# afterwards only if we made it here.
+madetmp=
+mkdir $TMPMP >/dev/null 2>&1 && madetmp=1
 
 confirm=""
 
@@ -362,7 +365,7 @@ echo " --- Step 4: Reinstall choice ------------------------------------------"
 
 done
 
-rmdir $TMPMP
+test -n "$madetmp" && rmdir $TMPMP
 
 nohome="0"
 
