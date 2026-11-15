@@ -8,6 +8,8 @@
 #include <minix/drvlib.h>
 #include <unistd.h>
 
+#include "gpt.h"
+
 /* Extended partition? */
 #define ext_part(s)	((s) == 0x05 || (s) == 0x0F)
 
@@ -84,6 +86,16 @@ static void parse_part_table(
   /* Read the partition table for the device. */
   if(!get_part_table(bdp, device, 0L, table, tmp_buf)) {
 	  return;
+  }
+
+  /* A protective MBR stands for a GPT: take the primary partitions from it.
+   * (Not for a CD-ROM, nor within a partition.)
+   */
+  if (style == P_PRIMARY && !atapi && gpt_protective(table)) {
+	if ((dv = (*bdp->bdr_part)(device + 1)) != NULL &&
+	    gpt_partition(bdp, device, base, limit, dv, tmp_buf))
+		return;
+	/* No valid GPT: carry on with the MBR as it is. */
   }
 
   /* Compute the device number of the first partition. */
