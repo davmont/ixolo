@@ -3,28 +3,23 @@
 #include <lib.h>
 
 #include <fcntl.h>
+#include <string.h>
 #include <unistd.h>
 
-int dup2(fd, fd2)
-int fd, fd2;
-{
-/* The behavior of dup2 is defined by POSIX in 6.2.1.2 as almost, but not
- * quite the same as fcntl.
+/*
+ * dup2(fd, fd2): VFS does the whole job in one request (F_DUP2FD), so fd2 is
+ * closed and reused atomically.  It used to be close(fd2) followed by
+ * fcntl(F_DUPFD, fd2), which could hand fd2 to another thread's open() in
+ * between, and then return a different descriptor than fd2.
  */
+int
+dup2(int fd, int fd2)
+{
+	message m;
 
-  if (fd2 < 0 || fd2 > OPEN_MAX) {
-	errno = EBADF;
-	return(-1);
-  }
-
-  /* Check to see if fildes is valid. */
-  if (fcntl(fd, F_GETFL) < 0) {
-	/* 'fd' is not valid. */
-	return(-1);
-  } else {
-	/* 'fd' is valid. */
-	if (fd == fd2) return(fd2);
-	close(fd2);
-	return(fcntl(fd, F_DUPFD, fd2));
-  }
+	memset(&m, 0, sizeof(m));
+	m.m_lc_vfs_fcntl.fd = fd;
+	m.m_lc_vfs_fcntl.cmd = F_DUP2FD;
+	m.m_lc_vfs_fcntl.arg_int = fd2;
+	return _syscall(VFS_PROC_NR, VFS_FCNTL, &m);
 }

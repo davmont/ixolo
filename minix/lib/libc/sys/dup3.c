@@ -4,23 +4,21 @@
 
 #include <errno.h>
 #include <fcntl.h>
+#include <string.h>
 #include <unistd.h>
 
 /*
  * dup3() is dup2() that can also set close-on-exec on the new descriptor in one
  * step, and that refuses -- rather than quietly succeeding -- when the two
- * descriptors are the same.  Qt uses it (its process code wants a CLOEXEC dup
- * without a window where the fd could leak across a concurrent exec).
+ * descriptors are the same.  Qt uses it: its process code wants a CLOEXEC dup
+ * without a window in which the fd could leak across a concurrent exec.
  *
- * MINIX has no dup3 system call, so this is built from dup2() plus fcntl().
- * The composition is not atomic with respect to a concurrent fork+exec, which
- * is the one thing dup3() exists to guarantee; on a single-threaded caller,
- * which is how it is normally used, that distinction does not arise.
+ * VFS does it in one request (F_DUP2FD_CLOEXEC), so that window does not exist.
  */
 int
 dup3(int from, int to, int flags)
 {
-	int rc;
+	message m;
 
 	/* Unlike dup2(), dup3() is required to fail here rather than no-op. */
 	if (from == to) {
@@ -33,18 +31,9 @@ dup3(int from, int to, int flags)
 		return -1;
 	}
 
-	if ((rc = dup2(from, to)) == -1)
-		return -1;
-
-	if ((flags & O_CLOEXEC) != 0) {
-		if (fcntl(to, F_SETFD, FD_CLOEXEC) == -1) {
-			int saved = errno;
-
-			(void)close(to);
-			errno = saved;
-			return -1;
-		}
-	}
-
-	return rc;
+	memset(&m, 0, sizeof(m));
+	m.m_lc_vfs_fcntl.fd = from;
+	m.m_lc_vfs_fcntl.cmd = (flags & O_CLOEXEC) ? F_DUP2FD_CLOEXEC : F_DUP2FD;
+	m.m_lc_vfs_fcntl.arg_int = to;
+	return _syscall(VFS_PROC_NR, VFS_FCNTL, &m);
 }

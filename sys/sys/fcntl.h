@@ -328,6 +328,8 @@ __END_DECLS
 #if defined(__minix)
 #define F_FREESP       100
 #define F_FLUSH_FS_CACHE	101	/* invalidate cache on associated FS */
+#define F_DUP2FD	102	/* dup2(): dup onto the given fd, atomically */
+#define F_DUP2FD_CLOEXEC 103	/* dup3(..., O_CLOEXEC) */
 #endif /* defined(__minix) */
 
 #endif /* !_SYS_FCNTL_H_ */

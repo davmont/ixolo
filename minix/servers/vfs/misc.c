@@ -219,6 +219,71 @@ int do_flock(void)
 }
 
 /*===========================================================================*
+ *				dup2fd					     *
+ *===========================================================================*/
+static int dup2fd(struct filp *f, int fd, int fd2, int cloexec)
+{
+/* dup2(fd, fd2) and dup3(): make fd2 refer to the open file 'f' that fd
+ * refers to, closing whatever fd2 referred to before.  'f' comes in locked.
+ * Unlike close() followed by F_DUPFD, there is no moment at which fd2 is
+ * free: another thread sharing the descriptor table cannot be handed fd2 by
+ * open(), socket(), etc. in between, and fd2 never refers to nothing.
+ */
+  struct filp *old;
+  struct filedesc *fdt = fp->fp_fd;
+
+  if (fd2 < 0 || fd2 >= OPEN_MAX) {
+	unlock_filp(f);
+	return(EBADF);
+  }
+  if (fd2 == fd) {
+	/* POSIX: return fd2 and leave FD_CLOEXEC alone.  dup3() rejects this
+	 * case in libc before it gets here.
+	 */
+	unlock_filp(f);
+	return(fd2);
+  }
+
+  /* Take the new reference while 'f' is still locked, then drop the lock:
+   * locking fd2's filp below could otherwise deadlock when fd2 is already a
+   * duplicate of fd (same filp).
+   */
+  f->filp_count++;
+  unlock_filp(f);
+
+  for (;;) {
+	if ((old = fdt->fd_filp[fd2]) == NULL)
+		break;
+	/* Locking may block; another thread can close or replace fd2 while it
+	 * does.  Only proceed once the slot still holds the filp we locked.
+	 */
+	old = get_filp2(fp, fd2, VNODE_OPCL);
+	if (old != NULL && fdt->fd_filp[fd2] == old)
+		break;
+	if (old != NULL)
+		unlock_filp(old);
+  }
+
+  /* No blocking from here until the slot is filled. */
+  fdt->fd_filp[fd2] = f;
+  if (cloexec)
+	FD_SET(fd2, &fdt->fd_cloexec_set);
+  else
+	FD_CLR(fd2, &fdt->fd_cloexec_set);
+
+  if (old != NULL) {
+	/* The rest of close_fd() for the descriptor's previous file.  As for
+	 * dup2(), errors from closing it are not reported.
+	 */
+	kq_fd_closed(fdt, fd2);
+	lock_release(fp, old->filp_vno);
+	(void) close_filp(old, FALSE /*may_suspend*/);
+  }
+
+  return(fd2);
+}
+
+/*===========================================================================*
  *				do_fcntl				     *
  *===========================================================================*/
 int do_fcntl(void)
@@ -238,6 +303,9 @@ int do_fcntl(void)
   locktype = (fcntl_req == F_FREESP) ? VNODE_WRITE : VNODE_READ;
   if ((f = get_filp(fd, locktype)) == NULL)
 	return(err_code);
+
+  if (fcntl_req == F_DUP2FD || fcntl_req == F_DUP2FD_CLOEXEC)
+	return dup2fd(f, fd, fcntl_argx, fcntl_req == F_DUP2FD_CLOEXEC);
 
   switch (fcntl_req) {
     case F_DUPFD:
