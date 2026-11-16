@@ -29,6 +29,7 @@ int do_lwp_self(void);
 int do_lwp_exit(void);
 void lwp_exit_finish(struct mproc *rmp);
 int do_lwp_park(void);
+void lwp_park_clock_set(int64_t shift);
 int do_lwp_unpark(void);
 int do_lwp_wakeup(void);
 int lwp_woken(struct mproc *rmp);
@@ -132,6 +133,7 @@ int do_setpgid(void);
 int do_timer(void);
 void ptimer_delivered(int slot, int id);
 void ptimer_release(struct mproc *rmp);
+void ptimer_clock_set(int64_t shift);
 
 /* trace.c */
 int do_trace(void);

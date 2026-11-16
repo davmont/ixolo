@@ -59,6 +59,8 @@ u64_t uptime_ns(int *precise);
 clock_t deadline_ticks(u64_t when);
 clock_t timeout_ticks(time_t sec, long nsec);
 u64_t tick_left_ns(clock_t tick);
+int64_t realtime_ahead_ns(void);
+int abs_deadline_ns(int realtime, int64_t sec, long nsec, u64_t *due);
 int tickdelay(clock_t ticks);
 int tsc_calibrate(void);
 u32_t sys_hz(void);

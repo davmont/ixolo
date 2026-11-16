@@ -15,6 +15,7 @@
  *   do_timer:		perform the PM_TIMER system call
  *   ptimer_delivered:	a timer's signal is being delivered
  *   ptimer_release:	delete a process's timers (exec, exit)
+ *   ptimer_clock_set:	the realtime clock was set
  */
 
 #include "pm.h"
@@ -41,6 +42,7 @@ struct ptimer {
   vir_bytes pt_value;		/* sigev_value */
   u64_t pt_expires;		/* monotonic time, ns; 0: disarmed */
   u64_t pt_interval;		/* ns; 0: one-shot */
+  int pt_abs_rt;		/* set for a time on CLOCK_REALTIME */
   int pt_queued;		/* our signal raised and not yet delivered */
   int pt_overrun;		/* expiries while it was queued */
   int pt_overrun_last;		/* reported by timer_getoverrun(2) */
@@ -141,6 +143,7 @@ disarm(struct ptimer *pt)
 	cancel_timer(&pt->pt_tmr);
   pt->pt_expires = 0;
   pt->pt_interval = 0;
+  pt->pt_abs_rt = FALSE;
 }
 
 /* Is 'signo' pending anywhere in the process that 'owner' leads? */
@@ -280,6 +283,30 @@ ptimer_release(struct mproc *rmp)
   }
 }
 
+/*===========================================================================*
+ *				ptimer_clock_set			     *
+ *===========================================================================*/
+void
+ptimer_clock_set(int64_t shift)
+{
+/* The realtime clock was set, and is now 'shift' ns behind where it was,
+ * against the monotonic clock: the timers set for a time on it go off at
+ * that time still, sooner or later than they would have; the periods of a
+ * repeating one, on from there.  Those that come due count as overruns.
+ */
+  struct ptimer *pt;
+  int64_t expires;
+
+  for (pt = &ptimers[0]; pt < &ptimers[NR_PTIMERS]; pt++) {
+	if (!pt->pt_inuse || !pt->pt_abs_rt || pt->pt_expires == 0)
+		continue;
+	expires = (int64_t) pt->pt_expires + shift;
+	cancel_timer(&pt->pt_tmr);
+	pt->pt_expires = (expires > 0) ? (u64_t) expires : 1;
+	arm(pt);
+  }
+}
+
 static int
 timer_create_op(int owner)
 {
@@ -348,8 +375,6 @@ static int
 timer_settime_op(struct ptimer *pt)
 {
   struct itimerspec its;
-  clock_t uptime, realtime;
-  time_t boottime;
   u64_t now, value, interval;
   int64_t rt_ahead;
   int r, precise;
@@ -371,19 +396,15 @@ timer_settime_op(struct ptimer *pt)
 
   now = uptime_ns(&precise);
   if (m_in.m_lc_pm_timer.flags & TIMER_ABSTIME) {
-	/* An absolute time on the timer's clock, which for CLOCK_REALTIME
-	 * is ahead of the monotonic one by the boot time and the ticks it has
-	 * gained since (see do_gettime).  A time that has passed expires at
-	 * the next tick.
+	/* An absolute time on the timer's clock.  A time that has passed
+	 * expires at the next tick.  On CLOCK_REALTIME, it stays that time
+	 * when the clock is set (ptimer_clock_set()).
 	 */
 	if (pt->pt_clock == CLOCK_REALTIME) {
-		if ((r = getuptime(&uptime, &realtime, &boottime)) != OK)
-			return r;
-		rt_ahead = (int64_t) boottime * (int64_t) NSEC +
-		    (int64_t) (int32_t) (realtime - uptime) *
-		    (int64_t) NSEC / (int64_t) system_hz;
+		rt_ahead = realtime_ahead_ns();
 		value = ((int64_t) value > rt_ahead) ?
 		    (u64_t) ((int64_t) value - rt_ahead) : 0;
+		pt->pt_abs_rt = TRUE;
 	}
 	pt->pt_expires = (value > now) ? value : now;
   } else {

@@ -41,6 +41,7 @@ struct psemwait {
 	endpoint_t	endpt;
 	unsigned long	seq;		/* arrival order */
 	int		timed;
+	u64_t		due;		/* uptime_ns() it times out at */
 	minix_timer_t	tmr;
 };
 
@@ -170,6 +171,10 @@ psem_timeout(int arg)
 	w = &psem_wait[arg];
 	if (w->ps == NULL)
 		return;
+	if (uptime_ns(NULL) < w->due) {	/* too far off to wait in one go */
+		set_timer(&w->tmr, deadline_ticks(w->due), psem_timeout, arg);
+		return;
+	}
 	w->timed = 0;				/* the timer is gone already */
 	psem_reply(w, ETIMEDOUT);
 	psem_update_sub();
@@ -270,11 +275,9 @@ do_psem_wait(message *m)
 {
 	struct psem *ps;
 	struct psemwait *w;
-	clock_t uptime, realtime, ticks;
-	time_t boottime;
-	int64_t sec, now_ticks, deadline;
-	long nsec;
-	int r, hz;
+	clock_t ticks;
+	u64_t due = 0;
+	int r;
 
 	psem_init();
 	if ((ps = psem_lookup(m->m_lc_ipc_psem.id)) == NULL)
@@ -289,27 +292,19 @@ do_psem_wait(message *m)
 	w = &psem_wait[_ENDPOINT_P(m->m_source)];
 	ticks = 0;
 	if (m->m_lc_ipc_psem.flags & IPC_PSEM_TIMED) {
-		sec = m->m_lc_ipc_psem.tv_sec;
-		nsec = m->m_lc_ipc_psem.tv_nsec;
-		if (nsec < 0 || nsec >= 1000000000L)
-			return EINVAL;
-		if ((r = getuptime(&uptime, &realtime, &boottime)) != OK)
+		/* A time on the clock: for CLOCK_REALTIME, as it is now (it
+		 * is not moved by clock_settime(2) while we wait). */
+		if ((r = abs_deadline_ns(1,
+		    m->m_lc_ipc_psem.tv_sec, m->m_lc_ipc_psem.tv_nsec, &due)) != OK)
 			return r;
-		hz = sys_hz();
-		now_ticks = (int64_t)boottime * hz + realtime;
-		deadline = sec * hz + ((int64_t)nsec * hz + 999999999) /
-		    1000000000;
-		if (deadline <= now_ticks)
-			return ETIMEDOUT;
-		if (deadline - now_ticks > TMRDIFF_MAX)
-			deadline = now_ticks + TMRDIFF_MAX;
-		ticks = (clock_t)(deadline - now_ticks);
+		ticks = deadline_ticks(due);
 	}
 
 	w->ps = ps;
 	w->endpt = m->m_source;
 	w->seq = ++psem_seq;
 	w->timed = (ticks > 0);
+	w->due = due;
 	if (w->timed)
 		set_timer(&w->tmr, ticks, psem_timeout,
 		    (int)_ENDPOINT_P(m->m_source));

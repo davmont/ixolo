@@ -32,6 +32,7 @@
 #include "mproc.h"
 
 #define LAST_FEW            2	/* last few slots reserved for superuser */
+#define FAR_PARK_SEC	(60LL * 60 * 24 * 365 * 200)	/* ~2170: far enough */
 
 static void exec_dethread_done(struct mproc *leader);
 static void exit_group_leader(struct mproc *leader);
@@ -881,78 +882,97 @@ lwp_unpark_one(int lwpid)
 static void
 lwp_park_expire(int arg)
 {
-/* A timed _lwp_park() has run out of time: it returns ETIMEDOUT. */
+/* A timed _lwp_park() has run out of time: it returns ETIMEDOUT.  Unless its
+ * time is still to come: one too far off to wait for in one go, or one moved
+ * by setting the realtime clock.
+ */
+  struct mproc *rmp;
   int slot;
 
   if (pm_isokendpt((endpoint_t) arg, &slot) != OK)
 	return;
-  if (!(mproc[slot].mp_flags & MP_LWP_PARKED))
+  rmp = &mproc[slot];
+  if (!(rmp->mp_flags & MP_LWP_PARKED))
 	return;
-  mproc[slot].mp_flags &= ~MP_LWP_PARKED;
-  sched_inherit_parked(&mproc[slot]);
+  if (uptime_ns(NULL) < rmp->mp_park_due) {
+	set_timer(&rmp->mp_park_timer, deadline_ticks(rmp->mp_park_due),
+	    lwp_park_expire, rmp->mp_endpoint);
+	return;
+  }
+  rmp->mp_flags &= ~MP_LWP_PARKED;
+  sched_inherit_parked(rmp);
   reply(slot, ETIMEDOUT);
 }
 
 /*===========================================================================*
- *				lwp_park_ticks				     *
+ *				lwp_park_clock_set			     *
+ *===========================================================================*/
+void
+lwp_park_clock_set(int64_t shift)
+{
+/* The realtime clock was set, and is now 'shift' ns behind where it was,
+ * against the monotonic clock: a thread parked until a time on it waits
+ * until that time still, sooner or later than it would have.
+ */
+  struct mproc *rmp;
+  int64_t due;
+
+  for (rmp = &mproc[0]; rmp < &mproc[NR_PROCS]; rmp++) {
+	if ((rmp->mp_flags & (IN_USE | MP_LWP_PARKED)) !=
+	    (IN_USE | MP_LWP_PARKED) || !rmp->mp_park_rt)
+		continue;
+	due = (int64_t) rmp->mp_park_due + shift;
+	rmp->mp_park_due = (due > 0) ? (u64_t) due : 1;
+	cancel_timer(&rmp->mp_park_timer);
+	lwp_park_expire(rmp->mp_endpoint);	/* or sets it anew */
+  }
+}
+
+/*===========================================================================*
+ *				lwp_park_due				     *
  *===========================================================================*/
 static int
-lwp_park_ticks(clock_t *ticksp)
+lwp_park_due(struct mproc *rmp)
 {
-/* Convert the timeout of the current _lwp_park() call to clock ticks from now,
- * rounded up.  Return OK, ETIMEDOUT if the time has passed already, or EINVAL.
+/* Set the time the current _lwp_park() call ends at, in uptime_ns(), and
+ * whether it is a time on CLOCK_REALTIME.  Return OK, ETIMEDOUT if the time
+ * has passed already, or EINVAL.
  */
-  clock_t uptime, realtime, now;
-  time_t boottime;
-  int64_t sec, ticks, max_sec;
+  int64_t sec, ns, now;
   int32_t nsec;
-  int r;
+  int precise;
 
   sec = m_in.m_lc_pm_lwp_park.sec;
   nsec = m_in.m_lc_pm_lwp_park.nsec;
+  switch (m_in.m_lc_pm_lwp_park.clock_id) {
+  case CLOCK_MONOTONIC:
+  case CLOCK_REALTIME:
+	break;
+  default:
+	return EINVAL;
+  }
+
+  if (m_in.m_lc_pm_lwp_park.flags & TIMER_ABSTIME) {
+	rmp->mp_park_rt =
+	    (m_in.m_lc_pm_lwp_park.clock_id == CLOCK_REALTIME);
+	return abs_deadline_ns(rmp->mp_park_rt, sec, nsec,
+	    &rmp->mp_park_due);
+  }
+
+  /* From now; without the TSC we know it only to the last tick, and now
+   * may be up to a tick later (as for timeout_ticks()).
+   */
   if (sec < 0 || nsec < 0 || nsec >= 1000000000)
 	return EINVAL;
-
-  if ((r = getuptime(&uptime, &realtime, &boottime)) != OK)
-	panic("lwp_park_ticks: getuptime failed: %d", r);
-
-  switch (m_in.m_lc_pm_lwp_park.clock_id) {
-  case CLOCK_MONOTONIC:	now = uptime;	break;
-  case CLOCK_REALTIME:	now = realtime;	break;
-  default:		return EINVAL;
-  }
-
-  /* An absolute CLOCK_REALTIME time counts from the boot time, as in
-   * do_gettime(); CLOCK_MONOTONIC counts from the boot.
-   */
-  if (m_in.m_lc_pm_lwp_park.flags & TIMER_ABSTIME) {
-	if (m_in.m_lc_pm_lwp_park.clock_id == CLOCK_REALTIME) {
-		if (sec < boottime)
-			return ETIMEDOUT;
-		sec -= boottime;
-	}
-  } else {
-	/* From now, which may be most of a tick past the last tick. */
-	if (sec == 0 && nsec == 0)
-		return ETIMEDOUT;
-	*ticksp = timeout_ticks(sec, nsec);
-	return OK;
-  }
-
-  /* Further ahead than a timer can reach: wait as long as one can.  For an
-   * absolute time this is the distance from now, not from the boot time,
-   * which can be years back after the clock was set.
-   */
-  max_sec = TMRDIFF_MAX / system_hz;
-  if (sec - (int64_t)(now / system_hz) >= max_sec) {
-	*ticksp = TMRDIFF_MAX;
-	return OK;
-  }
-  ticks = sec * system_hz +
-	((int64_t) nsec * system_hz + 999999999) / 1000000000 - now;
-  if (ticks <= 0)
+  if (sec == 0 && nsec == 0)
 	return ETIMEDOUT;
-  *ticksp = (ticks > TMRDIFF_MAX) ? TMRDIFF_MAX : (clock_t) ticks;
+  if (sec > FAR_PARK_SEC)
+	sec = FAR_PARK_SEC;		/* far enough */
+  now = (int64_t) uptime_ns(&precise);
+  ns = now + sec * 1000000000LL + nsec;
+  if (!precise)
+	ns += 1000000000LL / system_hz;
+  rmp->mp_park_due = (u64_t) ns;
   return OK;
 }
 
@@ -965,7 +985,6 @@ do_lwp_park(void)
 /* Block the calling thread until another thread unparks it (NetBSD-style
  * lwpid-based park; the 'hint' addresses are advisory and ignored here). */
   register struct mproc *rmp = mp;
-  clock_t ticks;
   int r, unpark;
 
   /* libpthread optimization: atomically unpark another LWP before parking. */
@@ -981,12 +1000,16 @@ do_lwp_park(void)
   if (lwp_woken(rmp))
 	return EINTR;
 
-  /* A timed park ends with ETIMEDOUT unless unparked or interrupted first. */
+  /* A timed park ends with ETIMEDOUT unless unparked or interrupted first,
+   * at the first tick at or after its time.
+   */
+  rmp->mp_park_due = 0;
+  rmp->mp_park_rt = FALSE;
   if (m_in.m_lc_pm_lwp_park.has_timeout) {
-	if ((r = lwp_park_ticks(&ticks)) != OK)
+	if ((r = lwp_park_due(rmp)) != OK)
 		return r;
-	set_timer(&rmp->mp_park_timer, ticks, lwp_park_expire,
-	    rmp->mp_endpoint);
+	set_timer(&rmp->mp_park_timer, deadline_ticks(rmp->mp_park_due),
+	    lwp_park_expire, rmp->mp_endpoint);
   }
 
   /* Park: do not reply, so the caller blocks in its SENDREC until unparked,
