@@ -8,6 +8,9 @@
  * as the mask is installed, before the call reaches VFS.  The handler also
  * makes a VFS call of its own, which must not disturb this.  An alarm stops
  * a call that blocks anyway.
+ *
+ * Also: paccept() leaves no arming behind when it fails in libc, and honours
+ * SA_RESTART.
  */
 #include <sys/types.h>
 #include <sys/select.h>
@@ -156,6 +159,69 @@ test175d(void)
 	(void)unlink(sun.sun_path);
 }
 
+/* paccept() details.  It must not leave the arming behind when accept4()
+ * rejects its arguments without asking VFS: a signal caught later would then
+ * make the next, unrelated accept() fail with EINTR at once.  And a SA_RESTART
+ * signal does not interrupt it, before VFS has the call or after: either way
+ * it goes on to block (until the alarm here).
+ */
+static void
+test175e(void)
+{
+	struct sigaction sa;
+	sigset_t m;
+	struct sockaddr_un sun;
+	int r, s, err;
+
+	subtest = 5;
+
+	if ((s = socket(AF_UNIX, SOCK_STREAM, 0)) == -1)
+		return;
+	memset(&sun, 0, sizeof(sun));
+	sun.sun_family = AF_UNIX;
+	strlcpy(sun.sun_path, "t175.sock", sizeof(sun.sun_path));
+	(void)unlink(sun.sun_path);
+	if (bind(s, (struct sockaddr *)&sun, sizeof(sun)) != 0) e(1);
+	if (listen(s, 1) != 0) e(2);
+
+	/* Bad flags: EINVAL from libc, and no arming left.  (The subtests
+	 * before left SIGUSR1 blocked: unblock it, so kill() delivers it.)
+	 */
+	sigemptyset(&m);
+	sigaddset(&m, SIGUSR1);
+	if (sigprocmask(SIG_UNBLOCK, &m, NULL) != 0) e(3);
+	sigemptyset(&m);
+	if (paccept(s, NULL, NULL, &m, ~0) != -1 || errno != EINVAL) e(4);
+	caught = alarmed = 0;
+	if (kill(getpid(), SIGUSR1) != 0) e(5);
+	if (caught != 1) e(6);
+	alarm(1);
+	r = accept(s, NULL, NULL);
+	err = errno;
+	alarm(0);
+	if (r != -1 || err != EINTR) e(7);
+	if (alarmed != 1) e(8);		/* EINTR at once: still armed */
+
+	/* SA_RESTART: blocks until the alarm, which is not SA_RESTART. */
+	memset(&sa, 0, sizeof(sa));
+	sa.sa_handler = on_usr1;
+	sa.sa_flags = SA_RESTART;
+	if (sigaction(SIGUSR1, &sa, NULL) != 0) e(9);
+	arm_signal(&m);
+	alarm(1);
+	r = paccept(s, NULL, NULL, &m, 0);
+	err = errno;
+	alarm(0);
+	if (r != -1 || err != EINTR) e(10);
+	if (caught != 1) e(11);
+	if (alarmed != 1) e(12);
+
+	sa.sa_flags = 0;
+	if (sigaction(SIGUSR1, &sa, NULL) != 0) e(13);
+	(void)close(s);
+	(void)unlink(sun.sun_path);
+}
+
 int
 main(int argc, char **argv)
 {
@@ -174,6 +240,7 @@ main(int argc, char **argv)
 	test175b();
 	test175c();
 	test175d();
+	test175e();
 
 	quit();
 	return 0;

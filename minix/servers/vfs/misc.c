@@ -252,8 +252,17 @@ static int dup2fd(struct filp *f, int fd, int fd2, int cloexec)
   unlock_filp(f);
 
   for (;;) {
-	if ((old = fdt->fd_filp[fd2]) == NULL)
+	if ((old = fdt->fd_filp[fd2]) == NULL) {
+		/* Free, unless get_fd() gave it to a call of another thread
+		 * that has yet to install it (open() blocked in a path
+		 * lookup, say).  That call would then overwrite the slot.
+		 * Wait for it to install the descriptor or give up, and look
+		 * again.
+		 */
+		if (wait_fd_reserved(fdt, fd2))
+			continue;
 		break;
+	}
 	/* Locking may block; another thread can close or replace fd2 while it
 	 * does.  Only proceed once the slot still holds the filp we locked.
 	 */

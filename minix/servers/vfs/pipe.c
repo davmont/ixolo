@@ -507,8 +507,13 @@ void unpause(int restart)
   int wasreviving = 0;
 
   if (!fp_is_blocked(fp)) {
-	/* Between the calls of a pselect(2) and the like: see do_sigarm(). */
-	if (fp->fp_flags & FP_SIGARM)
+	/* Between the calls of a pselect(2) and the like: see do_sigarm().
+	 * As for a blocked call below, a SA_RESTART signal does not interrupt
+	 * accept: letting it block is the same as restarting it.  select()
+	 * is never restarted.
+	 */
+	if ((fp->fp_flags & FP_SIGARM) &&
+	    (!restart || fp->fp_sigarm_call == VFS_SELECT))
 		fp->fp_flags |= FP_SIGARM_INTR;
 	return;
   }

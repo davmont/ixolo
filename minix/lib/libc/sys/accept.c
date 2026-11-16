@@ -207,6 +207,16 @@ int paccept(int sock, struct sockaddr *__restrict address,
 
 	r = accept4(sock, address, address_len, flags);
 
+	/* A call that failed before reaching VFS (accept4() checks its
+	 * arguments first) left the arming in place; VFS clears it once it has
+	 * the call.  A later call would then fail with a spurious EINTR.
+	 */
+	if (r == -1 && errno != EINTR) {
+		int e = errno;
+		__minix_sigarm(0);
+		errno = e;
+	}
+
 	saved_errno = errno;
 	(void)sigprocmask(SIG_SETMASK, &omask, NULL);
 	errno = saved_errno;
