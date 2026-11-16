@@ -8,7 +8,7 @@ _rccd_verbose=$(sysenv verbose 2>/dev/null)
 rcv() { [ "${_rccd_verbose:-0}" -ge 2 ] 2>/dev/null && echo "$@"; }
 
 rcv "RCCD: enter, pid=$$, args=$@"
-echo -n "Creating ramdisks:"
+echo -n "Creating writable directories:"
 
 # Set up a ramdisk to make a read-only part of the directory tree writable
 # $1 : ramdisk dev node to use
@@ -36,37 +36,48 @@ create_ramdisk()
 	rcv "RCCD:   mount /dev/$1 $2 ret=$r"
 }
 
-# Create /var ramdisk.  /var must hold both the existing services.cdb
-# (~327 KB, copied from the installed /var on CD-mount) AND a fresh
-# services.cdb.tmp written by services_mkdb at boot time, plus the rest
-# of /var/run (utmp/utmpx, pids, sockets) and /var/db.  At 768 KB the
-# temp write fails with ENOSPC, sysdb exits with code 2, and the boot
-# log spams `services_mkdb: Error writing temporary database
-# '/var/db/services.cdb.tmp': No space left on device`.  Bumped to
-# 2048 KB for comfortable headroom.
-if [ -x /usr/bin/startlxqt ]; then
-	# Desktop (LXQt/Qt6) CD.  A Qt session writes its config to /root/.config
-	# and font/icon/QML caches to /root/.cache, and uses /tmp and the runtime
-	# dir for wayland/D-Bus sockets and wl_shm scratch.  The base sizes ENOSPC
-	# mid-startup, and a truncated mmap'd cache then faults the session
-	# ("No space on device" -> nopage read SIGSEGV in lxqt-session).  These are
-	# RAM, so only grow them when the desktop is actually installed -- the base
-	# CD still boots in its usual small footprint.
-	#
-	# But these are a straight reservation of physical RAM, so keep them modest:
-	# the earlier 128M /root + 64M /tmp (~216M total) left almost nothing at
-	# -m 256 and the whole session died with "anon_pagefault: out of memory".
-	# ~112M total here leaves the desktop workable from ~512M upward; give the VM
-	# 1G+ for comfort.
-	create_ramdisk ram0 /var 8192
-	create_ramdisk ram1 /tmp 49152
-	create_ramdisk ram2 /usr/run 8192
-	create_ramdisk ram3 /root 49152
-else
-	create_ramdisk ram0 /var 2048
-	create_ramdisk ram1 /tmp 128
-	create_ramdisk ram2 /usr/run 64
-	create_ramdisk ram3 /root 512
-fi
+# Make the writable parts of the tree tmpfs file systems.  tmpfs takes pages
+# from VM only as files are written, so an idle live CD costs next to nothing
+# and a desktop session gets what it writes, up to half of RAM per mount (the
+# tmpfs default).  The fixed-size MFS ramdisks this replaces were reserved in
+# full at boot: the desktop's 112 MB of them starved VM on machines just big
+# enough to create them (a 128 MB machine ran out of memory while a 96 MB one,
+# where they failed, booted).
+#
+# $1 : path to make writable
+# $2 : mode of its root directory
+# $3 : ramdisk dev node and $4 size in blocks, used only if tmpfs fails
+#
+# The CD's contents of the path are copied in.  Once tmpfs covers the path
+# they are out of reach, so they are staged in /tmp first, which is mounted
+# before the others (the CD's /tmp is empty).
+create_tmpfs()
+{
+	rcv "RCCD: create_tmpfs $1 $2"
+	echo -n " $1"
+	_stage=
+	if [ "$1" != /tmp ]; then
+		_stage=/tmp/.rccd-stage
+		mkdir -p $_stage && (cd $1 && pax -rw -pe . $_stage)
+	fi
+	if mount -t tmpfs -o mode=$2 none $1 > /dev/null; then
+		if [ -n "$_stage" ]; then
+			(cd $_stage && pax -rw -pe . $1)
+		fi
+		chmod $2 $1
+	else
+		echo -n " (tmpfs failed: ramdisk)"
+		create_ramdisk $3 $1 $4
+	fi
+	if [ -n "$_stage" ]; then
+		rm -rf $_stage
+	fi
+	return 0
+}
+
+create_tmpfs /tmp 1777 ram1 2048
+create_tmpfs /var 755 ram0 8192
+create_tmpfs /usr/run 755 ram2 2048
+create_tmpfs /root 700 ram3 8192
 
 echo
