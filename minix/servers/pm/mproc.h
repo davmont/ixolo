@@ -143,6 +143,8 @@ EXTERN struct mproc {
   vir_bytes mp_sigreturn; 	/* address of C library __sigreturn function */
   minix_timer_t mp_timer;	/* watchdog timer for alarm(2), setitimer(2) */
   minix_timer_t mp_park_timer;	/* timeout of _lwp_park(2), sigtimedwait(2) */
+  u64_t mp_park_due;		/* uptime_ns() a timed _lwp_park() ends at */
+  int mp_park_rt;		/* ...for a time on CLOCK_REALTIME */
   clock_t mp_interval[NR_ITIMERS];	/* setitimer(2) repetition intervals */
   u64_t mp_alarm_due;		/* uptime_ns() the alarm was set for; 0: the
 				 * tick it goes off on (an interval's) */

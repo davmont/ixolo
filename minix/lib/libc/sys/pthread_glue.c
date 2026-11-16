@@ -78,7 +78,11 @@ int _sys___nanosleep50(const struct timespec *, struct timespec *);
 int _sys_clock_nanosleep(clockid_t, int, const struct timespec *,
     struct timespec *);
 
-/* clock_nanosleep(2): implement via nanosleep(2) (TIMER_ABSTIME -> relative).
+/* clock_nanosleep(2).  A time from now is a nanosleep(2).  A time on the
+ * clock is a timed _lwp_park(): PM waits for it on the clock as it is set
+ * meanwhile (clock_settime(2)).  An unpark that comes meanwhile is not ours,
+ * but for a wait of libpthread's this thread is about to make, or makes in a
+ * signal handler; it is passed on.
  * A cancellation point: libpthread's clock_nanosleep overrides the name. */
 #ifdef __weak_alias
 __weak_alias(clock_nanosleep, _sys_clock_nanosleep)
@@ -88,23 +92,46 @@ int
 _sys_clock_nanosleep(clockid_t clock_id, int flags, const struct timespec *rqtp,
     struct timespec *rmtp)
 {
-	struct timespec rel;
+	struct timespec res;
+	int r, saved, unparked;
 
-	if (flags & TIMER_ABSTIME) {
-		struct timespec now;
-		if (clock_gettime(clock_id, &now) == -1)
-			return errno;
-		rel.tv_sec = rqtp->tv_sec - now.tv_sec;
-		rel.tv_nsec = rqtp->tv_nsec - now.tv_nsec;
-		if (rel.tv_nsec < 0) { rel.tv_sec--; rel.tv_nsec += 1000000000L; }
-		if (rel.tv_sec < 0)
-			return 0;	/* deadline already passed */
-		rqtp = &rel;
-		rmtp = NULL;		/* remaining time is meaningless for ABSTIME */
+	saved = errno;
+	switch (clock_id) {
+	case CLOCK_REALTIME:
+	case CLOCK_MONOTONIC:
+		break;
+	case CLOCK_THREAD_CPUTIME_ID:	/* that never moves while we sleep */
+		return EINVAL;
+	default:
+		/* Another known clock: a CPU-time one. */
+		r = (clock_getres(clock_id, &res) == 0) ? ENOTSUP : EINVAL;
+		errno = saved;
+		return r;
 	}
-	if (_sys___nanosleep50(rqtp, rmtp) == -1)
-		return errno;
-	return 0;
+	if (rqtp->tv_sec < 0 || rqtp->tv_nsec < 0 ||
+	    rqtp->tv_nsec >= 1000000000L)
+		return EINVAL;
+
+	if (!(flags & TIMER_ABSTIME)) {
+		r = (_sys___nanosleep50(rqtp, rmtp) == -1) ? errno : 0;
+		errno = saved;
+		return r;
+	}
+
+	unparked = 0;
+	for (;;) {
+		if (_lwp_park(clock_id, TIMER_ABSTIME, rqtp, 0, NULL,
+		    NULL) == 0) {
+			unparked = 1;
+			continue;
+		}
+		r = (errno == ETIMEDOUT) ? 0 : errno;
+		break;
+	}
+	if (unparked)
+		(void) _lwp_unpark(_lwp_self(), NULL);
+	errno = saved;
+	return r;
 }
 
 /* rasctl(2): restartable atomic sequences are NetBSD-specific; unsupported. */

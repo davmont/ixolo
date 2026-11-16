@@ -168,12 +168,27 @@ do_getres(void)
   }
 }
 
+/* The realtime clock was set: what waits for a time on it, an absolute
+ * timer or sleep, waits for that time on the clock as now set.
+ */
+static void
+clock_was_set(int64_t before)
+{
+  int64_t shift;
+
+  if ((shift = before - realtime_ahead_ns()) == 0)
+	return;
+  ptimer_clock_set(shift);
+  lwp_park_clock_set(shift);
+}
+
 /*===========================================================================*
  *				do_settime				     *
  *===========================================================================*/
 int
 do_settime(void)
 {
+  int64_t before;
   int s;
 
   if (mp->mp_effuid != SUPER_USER) {
@@ -182,8 +197,16 @@ do_settime(void)
 
   switch (m_in.m_lc_pm_time.clk_id) {
 	case CLOCK_REALTIME:
+		/* adjtime(2) passes a signed delta; a time must be one. */
+		if (m_in.m_lc_pm_time.now &&
+		    (m_in.m_lc_pm_time.sec < 0 || m_in.m_lc_pm_time.nsec < 0 ||
+		    m_in.m_lc_pm_time.nsec >= 1000000000))
+			return(EINVAL);
+		before = realtime_ahead_ns();
 		s = sys_settime(m_in.m_lc_pm_time.now, m_in.m_lc_pm_time.clk_id,
 			m_in.m_lc_pm_time.sec, m_in.m_lc_pm_time.nsec);
+		if (s == OK && m_in.m_lc_pm_time.now)
+			clock_was_set(before);
 		return(s);
 	case CLOCK_MONOTONIC: /* monotonic cannot be changed */
 	default:
@@ -218,6 +241,7 @@ do_stime(void)
  */
   clock_t uptime, realtime;
   time_t boottime;
+  int64_t before;
   int s;
 
   if (mp->mp_effuid != SUPER_USER) {
@@ -227,9 +251,11 @@ do_stime(void)
       panic("do_stime couldn't get uptime: %d", s);
   boottime = m_in.m_lc_pm_time.sec - (realtime/system_hz);
 
+  before = realtime_ahead_ns();
   s= sys_stime(boottime);		/* Tell kernel about boottime */
   if (s != OK)
 	panic("pm: sys_stime failed: %d", s);
+  clock_was_set(before);
 
   return(OK);
 }

@@ -1,6 +1,7 @@
 #include "sysutil.h"
 
 #include <minix/timers.h>
+#include <errno.h>
 #include <stdint.h>
 
 /*
@@ -13,6 +14,9 @@
  *   deadline_ticks:	ticks until a monotonic time
  *   timeout_ticks:	ticks until a time from now
  *   tick_left_ns:	the time until a tick, in ns
+ *   realtime_ahead_ns:	how far CLOCK_REALTIME is ahead of uptime_ns()
+ *   abs_deadline_ns:	a time on CLOCK_REALTIME or CLOCK_MONOTONIC as an
+ *			uptime_ns()
  *
  * Tick k is at k / hz seconds of monotonic time, by definition.  Between
  * ticks, where userland reads the clock off the TSC (MINIX_KIF_CLOCKTSC, see
@@ -162,4 +166,41 @@ tick_left_ns(clock_t tick)
 	if ((d = (int32_t) (uint32_t) (tick - now)) <= 0)
 		return 0;		/* come */
 	return tick_ns((uint64_t) d, sys_hz()) - (uint64_t) in;
+}
+
+int64_t
+realtime_ahead_ns(void)
+{
+	clock_t uptime, realtime;
+	time_t boottime;
+
+	/* The boot time, and the ticks realtime has gained since: adjtime(2)
+	 * runs it fast or slow, clock_settime(2) sets it.
+	 */
+	if (getuptime(&uptime, &realtime, &boottime) != OK)
+		panic("realtime_ahead_ns: getuptime failed");
+	return (int64_t) boottime * (int64_t) NSEC +
+	    (int64_t) (int32_t) (realtime - uptime) * (int64_t) NSEC /
+	    (int64_t) sys_hz();
+}
+
+/* Far enough: in the year 2170 or so. */
+#define FAR_SEC		(60LL * 60 * 24 * 365 * 200)
+
+int
+abs_deadline_ns(int realtime, int64_t sec, long nsec, u64_t *due)
+{
+	int64_t ns;
+
+	if (sec < 0 || nsec < 0 || nsec >= (long) NSEC)
+		return EINVAL;
+	if (sec > FAR_SEC)
+		sec = FAR_SEC;
+	ns = sec * (int64_t) NSEC + nsec;
+	if (realtime)
+		ns -= realtime_ahead_ns();
+	if (ns <= (int64_t) uptime_ns(NULL))
+		return ETIMEDOUT;
+	*due = (u64_t) ns;
+	return OK;
 }
