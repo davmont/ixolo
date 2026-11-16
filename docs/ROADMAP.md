@@ -15,18 +15,6 @@ site in the same week.
 
 ---
 
-## In progress
-
-These are implemented and waiting for review and a test run on the target:
-
-| Item | What changes |
-|------|--------------|
-| `dup2()` / `dup3()` as one system call | VFS `fcntl` commands `F_DUP2FD` and `F_DUP2FD_CLOEXEC`. The target descriptor is never free, so a concurrent `open()` can't take it. Test 174. |
-| Atomic `pselect()`, `pollts()`/`ppoll()`, `paccept()` | New VFS call `VFS_SIGARM`. A signal caught between installing the mask and the call makes the call fail with `EINTR` instead of blocking. Test 175. |
-| `SEM_UNDO` for SysV semaphores | The IPC server keeps per-process adjustments and applies them on exit. Test 88d. |
-| GPT partition tables | libblockdriver reads the GPT when the MBR is only protective: up to four partitions, with the header and entry CRCs checked and a fallback to the backup header. |
-| Manual pages for `wlcompd`, `wlclient`, `fbcompd`, `wlprobe` and `wlcoreprobe` | |
-
 ## Kernel and core servers
 
 **Redefine `SUSPEND` as `EDONTREPLY`.** Both mean "don't reply now"; VFS
@@ -188,8 +176,9 @@ aren't lost:
 **K&R function definitions.** 74 remain, 63 of them in lwIP (`minix/lib/liblwip`).
 Convert the rest; leave lwIP until it is updated from upstream.
 
-**Manual pages.** Apart from the five above, about 20 MINIX-specific
-programs have no manual page. Find them by checking each `MAN=` in
+**Manual pages.** Apart from `wlcompd`, `wlclient`, `fbcompd`, `wlprobe`
+and `wlcoreprobe` (see "Done"), about 20 MINIX-specific programs have no
+manual page. Find them by checking each `MAN=` in
 `minix/commands`, `minix/usr.bin` and `minix/usr.sbin`.
 
 **NetBSD userland.** Some NetBSD utilities are still missing from the
@@ -260,6 +249,16 @@ protection, better out-of-memory handling in VM, `SA_RESTART`, `lchown`,
 `lchmod`, `fchownat`, `fchmodat` and the other `*at` calls, files over 2 GB
 in MFS (MFS version 4), USB mass storage on amd64, ext3/4, vfat, exFAT and
 tmpfs.
+
+Done in November 2026:
+
+| Item | What changed |
+|------|--------------|
+| `dup2()` / `dup3()` as one system call | VFS `fcntl` commands `F_DUP2FD` and `F_DUP2FD_CLOEXEC`. The target descriptor is never free, so a concurrent `open()` can't take it. Test 174. |
+| Atomic `pselect()`, `pollts()`/`ppoll()`, `paccept()` | New VFS call `VFS_SIGARM`. A signal caught between installing the mask and the call makes the call fail with `EINTR` instead of blocking (for `paccept()`, unless the signal is `SA_RESTART`). Test 175. |
+| `SEM_UNDO` for SysV semaphores | The IPC server keeps the adjustments per process, shared by its threads, and applies them on exit. Test 88d. |
+| GPT partition tables | libblockdriver reads the GPT when the MBR is only protective: up to four partitions, with the header and entry CRCs checked and a fallback to the backup header. |
+| Manual pages for `wlcompd`, `wlclient`, `fbcompd`, `wlprobe` and `wlcoreprobe` | |
 
 Done upstream before the fork: the socket API in VFS, setuid semantics, soft
 faults versus partial success, grant generation numbers, the IPC information
