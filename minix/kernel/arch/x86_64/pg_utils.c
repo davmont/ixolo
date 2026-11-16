@@ -486,8 +486,11 @@ phys_bytes alloc_lowest(kinfo_t *cbi, phys_bytes len)
  * while loading the module's segments, never destroys the identity mapping of
  * the module's own ELF headers.  (alloc_lowest() put the copy low, inside that
  * range, which faulted once a segment allocation reached the copy's 2 MB page
- * - the regression the 512->896 MB expansion exposed.)  Requires RAM above the
- * ceiling, i.e. >= ~1 GB, as the amd64 layout already assumes.
+ * - the regression the 512->896 MB expansion exposed.)  On a machine with less
+ * RAM than that the copy lands below the ceiling, which is safe as long as it
+ * shares no 2 MB page with VM's segments: its text and data at 4 MB, a few MB
+ * in all, and its stack just below USR_STACKTOP.  The top of RAM is far from
+ * both, which is why the system boots in as little as 56 MB.
  *
  * The caller reaches the copy through the 0-4 GB identity map, so it must end
  * at or below 4 GB: on a machine with RAM above 4 GB (any QEMU guest of 4 GB or
