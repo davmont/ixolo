@@ -640,6 +640,11 @@ int do_getepinfo(void)
 	return(ESRCH);
   rmp = &mproc[slot];
 
+  /* A thread's slot has a PID of its own, for PM's use; the caller gets the
+   * process's, as getpid(2) in the thread would, and the endpoint of the
+   * leader, which stands for the process until its last thread is gone.
+   */
+  mp->mp_reply.m_pm_lsys_getepinfo.leader = process_of(rmp)->mp_endpoint;
   mp->mp_reply.m_pm_lsys_getepinfo.uid = rmp->mp_realuid;
   mp->mp_reply.m_pm_lsys_getepinfo.euid = rmp->mp_effuid;
   mp->mp_reply.m_pm_lsys_getepinfo.gid = rmp->mp_realgid;
@@ -652,7 +657,7 @@ int do_getepinfo(void)
 	    m_in.m_lsys_pm_getepinfo.groups, ngroups * sizeof(gid_t))) != OK)
 		return(r);
   }
-  return(rmp->mp_pid);
+  return(process_of(rmp)->mp_pid);
 }
 
 /*===========================================================================*

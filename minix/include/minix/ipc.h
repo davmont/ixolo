@@ -2139,8 +2139,9 @@ typedef struct {
 	gid_t gid;
 	gid_t egid;
 	int ngroups;
+	endpoint_t leader;	/* the process's thread-group leader */
 
-	uint8_t padding[36];
+	uint8_t padding[32];
 } mess_pm_lsys_getepinfo;
 _ASSERT_MSG_SIZE(mess_pm_lsys_getepinfo);
 

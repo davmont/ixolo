@@ -22,8 +22,14 @@ struct iproc {
 	unsigned int ip_nsops;		/* number of pending operations */
 	struct sembuf *ip_blkop;	/* pointer to operation that blocked */
 	endpoint_t ip_endpt;		/* process endpoint */
+	endpoint_t ip_lead;		/* its thread-group leader's */
 	pid_t ip_pid;			/* process PID */
 	TAILQ_ENTRY(iproc) ip_next;	/* next waiting process */
+	/*
+	 * SEM_UNDO entries are per process, shared by its threads: they are
+	 * kept in the slot of the thread-group leader (getnpidleader()), whose
+	 * exit PM reports once the last thread is gone.
+	 */
 	endpoint_t ip_undo_endpt;	/* owner of the entries below */
 	pid_t ip_undo_pid;		/* ...and its PID */
 	unsigned int ip_nundo;		/* number of SEM_UNDO entries */
@@ -261,9 +267,9 @@ complete_semop(struct iproc * ip, int code)
 }
 
 /*
- * Return the SEM_UNDO entries of the process with the given endpoint: the
- * process table slot, with entries left over from an earlier process in that
- * slot thrown away.
+ * Return the SEM_UNDO entries of the process whose thread-group leader has
+ * the given endpoint: the leader's process table slot, with entries left over
+ * from an earlier process in that slot thrown away.
  */
 static struct iproc *
 undo_proc(endpoint_t endpt)
@@ -297,9 +303,8 @@ undo_find(struct iproc * ip, struct sem_struct * sem, unsigned short num)
 /*
  * Before a semop(2) call: check that the process has room for the SEM_UNDO
  * entries the call would add, and that no adjustment would exceed SEMAEM.
- * Nothing else changes a process's entries while it is blocked in the call,
- * except that removing them (IPC_RMID, SETVAL, SETALL) frees room, so the
- * check still holds when the call completes later.
+ * Other threads of the process can change its entries while the call is
+ * blocked, so this is checked again before a blocked call completes.
  */
 static int
 undo_check(endpoint_t endpt, struct sem_struct * sem, struct sembuf * sops,
@@ -340,7 +345,7 @@ undo_check(endpoint_t endpt, struct sem_struct * sem, struct sembuf * sops,
 
 /*
  * After a semop(2) call succeeded: record its SEM_UNDO adjustments.
- * undo_check() has made sure there is room.
+ * undo_check(), just before, has made sure there is room.
  */
 static void
 undo_record(endpoint_t endpt, pid_t pid, struct sem_struct * sem,
@@ -407,11 +412,31 @@ undo_exit(endpoint_t endpt)
 	struct semundo *su;
 	struct sem_struct *sem;
 	struct semaphore *sp;
+	unsigned short sets[SEMUME], seqs[SEMUME];
+	unsigned int i, j, nsets, slot;
 	int val;
+
+	/*
+	 * Other threads of the process that were blocked in semop(2) are gone
+	 * too; PM reports only the leader's exit.  Drop their calls.
+	 */
+	for (slot = 0; slot < __arraycount(iproc); slot++) {
+		ip = &iproc[slot];
+		if (ip->ip_sem != NULL && ip->ip_lead == endpt &&
+		    ip->ip_endpt != endpt)
+			complete_semop(ip, EDONTREPLY);
+	}
 
 	ip = &iproc[_ENDPOINT_P(endpt)];
 	if (ip->ip_undo_endpt != endpt)
 		return;
+
+	/*
+	 * Apply all of the adjustments first, and only then let waiters
+	 * proceed, so that none sees a set with only part of a semop(2)
+	 * undone.
+	 */
+	nsets = 0;
 	while (ip->ip_nundo > 0) {
 		su = &ip->ip_undo[--ip->ip_nundo];
 		sem = &sem_list[su->su_ix];
@@ -427,10 +452,24 @@ undo_exit(endpoint_t endpt)
 		sp->semval = val;
 		sp->sempid = ip->ip_undo_pid;
 		sem->semid_ds.sem_otime = clock_time(NULL);
-		/* That may let others proceed. */
-		check_set(sem);
+		for (j = 0; j < nsets; j++)
+			if (sets[j] == su->su_ix)
+				break;
+		if (j == nsets) {
+			sets[nsets] = su->su_ix;
+			seqs[nsets++] = su->su_seq;
+		}
 	}
 	ip->ip_undo_endpt = NONE;
+
+	/* That may let others proceed. */
+	for (i = 0; i < nsets; i++) {
+		sem = &sem_list[sets[i]];
+		/* Waking one set's waiters cannot remove another set. */
+		if ((sem->semid_ds.sem_perm.mode & SEM_ALLOC) &&
+		    sem->semid_ds.sem_perm._seq == seqs[i])
+			check_set(sem);
+	}
 }
 
 /*
@@ -586,14 +625,22 @@ check_set(struct sem_struct * sem)
 		woken_up = FALSE;
 
 		TAILQ_FOREACH_SAFE(ip, &sem->waiters, ip_next, nextip) {
-			/* Retry the entire semop(2) operation, atomically. */
-			r = try_semop(ip->ip_sem, ip->ip_sops, ip->ip_nsops,
-			    ip->ip_pid, &blkop);
+			/*
+			 * Retry the entire semop(2) operation, atomically.
+			 * Another thread of the process may have used up the
+			 * room for its SEM_UNDO entries meanwhile: check it
+			 * again, and fail the call if there is none.
+			 */
+			r = undo_check(ip->ip_lead, ip->ip_sem, ip->ip_sops,
+			    ip->ip_nsops);
+			if (r == OK)
+				r = try_semop(ip->ip_sem, ip->ip_sops,
+				    ip->ip_nsops, ip->ip_pid, &blkop);
 
 			if (r != SUSPEND) {
 				/* Success or failure. */
 				if (r == OK)
-					undo_record(ip->ip_endpt, ip->ip_pid,
+					undo_record(ip->ip_lead, ip->ip_pid,
 					    ip->ip_sem, ip->ip_sops,
 					    ip->ip_nsops);
 				complete_semop(ip, r);
@@ -858,6 +905,7 @@ do_semop(message * m)
 	struct sem_struct *sem;
 	struct iproc *ip;
 	pid_t pid;
+	endpoint_t leader;
 
 	id = m->m_lc_ipc_semop.id;
 	nsops = m->m_lc_ipc_semop.size;
@@ -918,16 +966,19 @@ do_semop(message * m)
 	 * deadlock situations etc.
 	 */
 
-	pid = getnpid(m->m_source);
+	if ((pid = getnpidleader(m->m_source, &leader)) < 0) {
+		r = pid;
+		goto out_free;
+	}
 
 	/* Room for the SEM_UNDO adjustments, if any. */
-	if ((r = undo_check(m->m_source, sem, sops, nsops)) != OK)
+	if ((r = undo_check(leader, sem, sops, nsops)) != OK)
 		goto out_free;
 
 	/* Try to perform the operation now. */
 	r = try_semop(sem, sops, nsops, pid, &blkop);
 	if (r == OK)
-		undo_record(m->m_source, pid, sem, sops, nsops);
+		undo_record(leader, pid, sem, sops, nsops);
 
 	if (r == SUSPEND) {
 		/*
@@ -940,9 +991,17 @@ do_semop(message * m)
 		assert(slot < __arraycount(iproc));
 
 		ip = &iproc[slot];
+		/*
+		 * A call left by a thread that was in this slot before: PM
+		 * reports the exit of a process's threads only with the
+		 * leader's, which may not have come yet.
+		 */
+		if (ip->ip_sem != NULL && ip->ip_endpt != m->m_source)
+			complete_semop(ip, EDONTREPLY);
 		assert(ip->ip_sem == NULL); /* can't already be in use */
 
 		ip->ip_endpt = m->m_source;
+		ip->ip_lead = leader;
 		ip->ip_pid = pid;
 		ip->ip_sem = sem;
 		ip->ip_sops = sops;

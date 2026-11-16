@@ -36,6 +36,7 @@ COPTS.test68.c=	-O0
 LDADD.test59=	-lmthread
 LDADD.test76=	-lutil
 LDADD.test77=	-lutil
+LDADD.test88=	-lpthread
 LDADD.test96=	-lpthread
 LDADD.test127=	-lpthread
 LDADD.test130=	-lpthread

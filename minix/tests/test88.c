@@ -10,6 +10,8 @@
 #include <sys/mman.h>
 #include <sys/sysctl.h>
 #include <signal.h>
+#include <pthread.h>
+#include <stdint.h>
 
 #include "common.h"
 
@@ -2340,6 +2342,22 @@ undo_wait(void)
 	if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) e(0);
 }
 
+static int undo_thread_id;
+
+/* A thread's semop(2), with SEM_UNDO. */
+static void *
+undo_thread(void * arg)
+{
+	struct sembuf sop;
+
+	sop.sem_num = 0;
+	sop.sem_op = (int)(intptr_t)arg;
+	sop.sem_flg = SEM_UNDO;
+	if (semop(undo_thread_id, &sop, 1) != 0)
+		return (void *)1;
+	return NULL;
+}
+
 /*
  * Test SEM_UNDO support: a process's semop(2) operations with SEM_UNDO are
  * undone when it exits; SETVAL and SETALL clear the adjustments; and the
@@ -2350,8 +2368,9 @@ test88d(void)
 {
 	struct seminfo seminfo;
 	struct sembuf sop, *sops;
-	int id, tochild[2];
+	int id, tochild[2], status;
 	unsigned int i;
+	pid_t pid;
 
 	subtest = 3;
 
@@ -2431,6 +2450,41 @@ test88d(void)
 	if (write(tochild[1], "x", 1) != 1) e(0);
 	undo_wait();
 	if (semctl(id, 0, GETVAL) != 0) e(0);
+
+	/*
+	 * The adjustments are the process's, not a thread's: those of all its
+	 * threads add up, and are undone when the process exits, whichever
+	 * thread made them.  Here a thread adds 3 and exits, and the main
+	 * thread takes 1; the process's exit takes the other 2.
+	 */
+	if (semctl(id, 0, SETVAL, 0) != 0) e(0);
+	undo_thread_id = id;
+	switch (pid = fork()) {
+	case -1:
+		e(0);
+		break;
+	case 0: {
+		pthread_t t;
+		void *res;
+
+		if (pthread_create(&t, NULL, undo_thread, (void *)3) != 0)
+			_exit(1);
+		if (pthread_join(t, &res) != 0 || res != NULL)
+			_exit(2);
+		sop.sem_num = 0;
+		sop.sem_op = -1;
+		sop.sem_flg = SEM_UNDO;
+		if (semop(id, &sop, 1) != 0)
+			_exit(3);
+		_exit(0);
+	}
+	default:
+		if (waitpid(pid, &status, 0) != pid) e(0);
+		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) e(0);
+		if (semctl(id, 0, GETVAL) != 0) e(0);
+		/* The PID is the process's, not the thread's. */
+		if (semctl(id, 0, GETPID) != pid) e(0);
+	}
 
 	/* An adjustment beyond SEMAEM fails with ERANGE, changing nothing. */
 	sop.sem_op = seminfo.semaem + 1;
