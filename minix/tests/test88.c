@@ -11,6 +11,7 @@
 #include <sys/sysctl.h>
 #include <signal.h>
 #include <pthread.h>
+#include <fcntl.h>
 #include <stdint.h>
 
 #include "common.h"
@@ -2485,6 +2486,51 @@ test88d(void)
 		/* The PID is the process's, not the thread's. */
 		if (semctl(id, 0, GETPID) != pid) e(0);
 	}
+
+	/*
+	 * execve() removes the process's other threads, without PM reporting
+	 * their exit.  A thread blocked in semop(2) then must not be woken
+	 * later: that would take the count for nobody.  The child's pipe is
+	 * close-on-exec, so EOF on it means the exec is done.
+	 */
+	if (semctl(id, 0, SETVAL, 0) != 0) e(0);
+	(void)close(tochild[0]);
+	(void)close(tochild[1]);
+	if (pipe2(tochild, O_CLOEXEC) != 0) e(0);
+	switch (pid = fork()) {
+	case -1:
+		e(0);
+		break;
+	case 0: {
+		pthread_t t;
+
+		(void)close(tochild[0]);
+		if (pthread_create(&t, NULL, undo_thread, (void *)-1) != 0)
+			_exit(1);
+		while (semctl(id, 0, GETNCNT) != 1)
+			usleep(10000);
+		execl("/bin/sleep", "sleep", "3", (char *)NULL);
+		_exit(2);
+	}
+	default: {
+		char c;
+
+		(void)close(tochild[1]);
+		if (read(tochild[0], &c, 1) != 0) e(0);
+		(void)close(tochild[0]);
+		sop.sem_num = 0;
+		sop.sem_op = 1;
+		sop.sem_flg = 0;
+		if (semop(id, &sop, 1) != 0) e(0);
+		if (semctl(id, 0, GETVAL) != 1) e(0);
+		if (semctl(id, 0, GETNCNT) != 0) e(0);
+		if (waitpid(pid, &status, 0) != pid) e(0);
+		if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) e(0);
+		if (semctl(id, 0, GETVAL) != 1) e(0);
+	}
+	}
+	if (pipe(tochild) != 0) e(0);	/* closed again below */
+	if (semctl(id, 0, SETVAL, 0) != 0) e(0);
 
 	/* An adjustment beyond SEMAEM fails with ERANGE, changing nothing. */
 	sop.sem_op = seminfo.semaem + 1;

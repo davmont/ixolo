@@ -83,7 +83,7 @@ resume_event(struct mproc * rmp)
 	assert(rmp->mp_eventsub != NO_EVENTSUB);
 
 	/* Which event should we be concerned about? */
-	if (rmp->mp_flags & EXITING)
+	if (rmp->mp_flags & (EXITING | MP_LWP_TEARDOWN))
 		event = PROC_EVENT_EXIT;
 	else if (rmp->mp_flags & UNPAUSED)
 		event = PROC_EVENT_SIGNAL;
@@ -116,7 +116,9 @@ resume_event(struct mproc * rmp)
 	rmp->mp_flags &= ~EVENT_CALL;
 	rmp->mp_eventsub = NO_EVENTSUB;
 
-	if (event == PROC_EVENT_EXIT)
+	if (event == PROC_EVENT_EXIT && (rmp->mp_flags & MP_LWP_TEARDOWN))
+		lwp_exit_finish(rmp);		/* a thread: see main.c */
+	else if (event == PROC_EVENT_EXIT)
 		exit_restart(rmp);
 	else if (event == PROC_EVENT_SIGNAL)
 		restart_sigs(rmp);
@@ -262,7 +264,7 @@ do_proc_event_reply(void)
 		return SUSPEND;
 	}
 
-	if (rmp->mp_flags & EXITING)
+	if (rmp->mp_flags & (EXITING | MP_LWP_TEARDOWN))
 		event = PROC_EVENT_EXIT;
 	else if (rmp->mp_flags & UNPAUSED)
 		event = PROC_EVENT_SIGNAL;

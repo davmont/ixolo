@@ -417,8 +417,9 @@ undo_exit(endpoint_t endpt)
 	int val;
 
 	/*
-	 * Other threads of the process that were blocked in semop(2) are gone
-	 * too; PM reports only the leader's exit.  Drop their calls.
+	 * The process's other threads were reported gone before (PM publishes
+	 * the exit of each thread before it frees the thread's slot), so none
+	 * should still be blocked in semop(2).  Make sure.
 	 */
 	for (slot = 0; slot < __arraycount(iproc); slot++) {
 		ip = &iproc[slot];
@@ -992,9 +993,10 @@ do_semop(message * m)
 
 		ip = &iproc[slot];
 		/*
-		 * A call left by a thread that was in this slot before: PM
-		 * reports the exit of a process's threads only with the
-		 * leader's, which may not have come yet.
+		 * A call left by an earlier process or thread in this slot.
+		 * PM reports every exit before it frees the slot, and that
+		 * drops the call, so this should not happen; but if it does,
+		 * drop it here rather than assert.
 		 */
 		if (ip->ip_sem != NULL && ip->ip_endpt != m->m_source)
 			complete_semop(ip, EDONTREPLY);
@@ -1126,9 +1128,15 @@ sem_process_event(endpoint_t endpt, int has_exited)
 	 * signal, then we must wake it up with EINTR.
 	 */
 	if (ip->ip_sem != NULL) {
-		assert(ip->ip_endpt == endpt);
-
-		complete_semop(ip, has_exited ? EDONTREPLY : EINTR);
+		if (ip->ip_endpt != endpt) {
+			/*
+			 * A call left by an earlier occupant of the slot
+			 * (see do_semop()): drop it, whatever this event is
+			 * about.
+			 */
+			complete_semop(ip, EDONTREPLY);
+		} else
+			complete_semop(ip, has_exited ? EDONTREPLY : EINTR);
 	}
 
 	/* On exit, undo its SEM_UNDO operations. */
