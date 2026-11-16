@@ -419,6 +419,12 @@ int pm_exec(vir_bytes path, size_t path_len, vir_bytes frame, size_t frame_len,
 
   clo_exec(fp);
 
+  /* An arming by pselect(2) and the like (do_sigarm()) does not survive into
+   * the new image: a signal handler might have left the armed window by
+   * siglongjmp() and then called execve().
+   */
+  fp->fp_flags &= ~(FP_SIGARM | FP_SIGARM_INTR);
+
   if (execi.args.allow_setuid) {
 	/* If after loading the image we're still allowed to run with
 	 * setuid or setgid, change credentials now */

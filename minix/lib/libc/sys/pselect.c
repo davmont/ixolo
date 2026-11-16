@@ -1,26 +1,24 @@
 /*
- * pselect(2) for MINIX.
+ * pselect(2) for MINIX: install the caller's signal mask (PM), run select(2)
+ * with the timespec converted to a timeval (VFS), and restore the mask.
  *
- * MINIX's VFS has no atomic pselect kernel call, so this wraps the existing
- * select(2) emulation: temporarily install the caller's signal mask, run
- * select() with the timespec converted to a timeval, then restore the mask.
- *
- * NOTE: the mask swap and the select() are NOT atomic, so a signal that
- * arrives in the (tiny) window between sigprocmask() and select() can be
- * missed for the duration of the call -- the classic pre-pselect race.  This
- * matches what MINIX consumers (e.g. dhcpcd's eloop) already do by hand; it is
- * provided here so they can use the standard interface instead of open-coding
- * the shim.  Code needing true atomicity must not rely on it.
+ * These are separate calls, so a signal that the new mask unblocks could be
+ * caught after the mask is installed but before VFS has the select(); it would
+ * then block regardless -- the race pselect() exists to avoid.  So the select()
+ * is armed first (__minix_sigarm(), VFS's do_sigarm()): VFS notes a signal
+ * caught in between and fails the select() with EINTR instead of blocking.
  */
 
 #include <sys/cdefs.h>
 #include "namespace.h"
+#include <lib.h>
 
 #include <sys/select.h>
 #include <sys/time.h>
 #include <signal.h>
 #include <errno.h>
 
+void __minix_sigarm(int);
 int _sys___pselect50(int, fd_set * __restrict, fd_set * __restrict, fd_set * __restrict, const struct timespec * __restrict, const sigset_t * __restrict);
 
 int
@@ -39,8 +37,11 @@ _sys___pselect50(int nfds, fd_set * __restrict readfds, fd_set * __restrict writ
 	}
 
 	if (sigmask != NULL) {
-		if (sigprocmask(SIG_SETMASK, sigmask, &omask) != 0)
+		__minix_sigarm(VFS_SELECT);
+		if (sigprocmask(SIG_SETMASK, sigmask, &omask) != 0) {
+			__minix_sigarm(0);
 			return -1;
+		}
 		smask = 1;
 	}
 

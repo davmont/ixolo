@@ -87,6 +87,7 @@ EXTERN struct fproc {
   message fp_msg;		/* pending or active message from process */
   message fp_pm_msg;		/* pending/active postponed PM request */
 
+  int fp_sigarm_call;		/* FP_SIGARM: the call it applies to */
   char fp_name[PROC_NAME_LEN];	/* Last exec() */
 #if LOCK_DEBUG
   int fp_vp_rdlocks;		/* number of read-only locks on vnodes */
@@ -110,6 +111,8 @@ EXTERN struct fproc {
 #define FP_EXITING	 0020	/* Set if process is exiting */
 #define FP_PM_WORK	 0040	/* Set if process has a postponed PM request */
 #define FP_RESTART	 0100	/* unpause(): an EINTR reply becomes ERESTARTSYS */
+#define FP_SIGARM	 0200	/* do_sigarm(): armed for fp_sigarm_call */
+#define FP_SIGARM_INTR	 0400	/* ...and a signal was caught since */
 
 /* Field values. */
 #define NOT_REVIVING       0xC0FFEEE	/* process is not being revived */

@@ -1,21 +1,15 @@
 /*
- * pollts(2) for MINIX.
- *
- * MINIX's VFS has no atomic pollts kernel call, so this wraps the existing
- * poll(2) emulation (itself layered on select): temporarily install the
- * caller's signal mask, run poll() with the timespec converted to a
- * millisecond timeout, then restore the mask.
- *
- * NOTE: as with pselect(2), the mask swap and the poll() are NOT atomic, so a
- * signal delivered in the window between sigprocmask() and poll() can be
- * missed for the duration of the call.  This matches the hand-rolled shim
- * MINIX consumers (e.g. dhcpcd's eloop) already use; it is provided so they
- * can call the standard interface.  Code needing true atomicity must not rely
- * on it.
+ * pollts(2) for MINIX: install the caller's signal mask, run poll(2) (itself
+ * layered on select) with the timespec converted to a millisecond timeout,
+ * then restore the mask.  As in pselect(2), the select() is armed first so
+ * that a signal caught before VFS has it makes it fail with EINTR rather than
+ * block.  (Only the first select() poll() makes is armed: poll() makes a
+ * second one only after the first failed with EBADF.)
  */
 
 #include <sys/cdefs.h>
 #include "namespace.h"
+#include <lib.h>
 
 #include <sys/poll.h>
 #include <sys/time.h>
@@ -23,6 +17,7 @@
 #include <errno.h>
 #include <limits.h>
 
+void __minix_sigarm(int);
 int _sys___pollts50(struct pollfd * __restrict, nfds_t, const struct timespec * __restrict, const sigset_t * __restrict);
 
 int
@@ -45,8 +40,12 @@ _sys___pollts50(struct pollfd * __restrict fds, nfds_t nfds,
 	}
 
 	if (sigmask != NULL) {
-		if (sigprocmask(SIG_SETMASK, sigmask, &omask) != 0)
+		/* poll() is select(): arm it, as in pselect(). */
+		__minix_sigarm(VFS_SELECT);
+		if (sigprocmask(SIG_SETMASK, sigmask, &omask) != 0) {
+			__minix_sigarm(0);
 			return -1;
+		}
 		smask = 1;
 	}
 

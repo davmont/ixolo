@@ -85,6 +85,8 @@ struct filp *get_filp(int fild, tll_access_t locktype);
 struct filp *get_filp2(struct fproc *rfp, int fild, tll_access_t locktype);
 void lock_filp(struct filp *filp, tll_access_t locktype);
 void unlock_filp(struct filp *filp);
+struct filedesc;
+int wait_fd_reserved(struct filedesc *fdt, int fd);
 void unlock_filps(struct filp *filp1, struct filp *filp2);
 void invalidate_filp(struct filp *);
 void invalidate_filp_by_endpt(endpoint_t proc_e);
@@ -126,6 +128,7 @@ void thread_cleanup(void);
 /* misc.c */
 void pm_exit(void);
 int do_fcntl(void);
+int do_sigarm(void);
 int do_flock(void);
 int do_fallocate(void);
 void pm_fork(endpoint_t pproc, endpoint_t cproc, pid_t cpid);

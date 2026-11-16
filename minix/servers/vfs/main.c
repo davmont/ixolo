@@ -295,6 +295,17 @@ static void do_work(void)
 
   /* Copy the results back to the user and send reply. */
   if (error != SUSPEND) reply(&job_m_out, fp->fp_endpoint, error);
+
+  /* The call a pselect(2) or the like armed (see do_sigarm()): if a signal
+   * was caught since, it must not stay blocked.
+   */
+  if ((fp->fp_flags & FP_SIGARM) && job_call_nr == fp->fp_sigarm_call) {
+	int caught = (fp->fp_flags & FP_SIGARM_INTR);
+
+	fp->fp_flags &= ~(FP_SIGARM | FP_SIGARM_INTR);
+	if (error == SUSPEND && caught && fp_is_blocked(fp))
+		unpause(FALSE /*restart*/);
+  }
 }
 
 /*===========================================================================*

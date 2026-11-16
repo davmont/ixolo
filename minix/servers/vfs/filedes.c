@@ -382,6 +382,42 @@ unreserve_fd(struct filp *filp)
   }
 }
 
+/*===========================================================================*
+ *				wait_fd_reserved			     *
+ *===========================================================================*/
+int
+wait_fd_reserved(struct filedesc *fdt, int fd)
+{
+/* If get_fd() reserved descriptor 'fd' of table 'fdt' for a call that has yet
+ * to install it, wait until that call installs it or gives up (it does either
+ * before unlocking its filp, which drops the reservation) and return TRUE.
+ * Return FALSE at once if the descriptor is not reserved.
+ */
+  struct worker_thread *org_self;
+  struct filp *f;
+
+  if (!FD_ISSET(fd, &fdt->fd_reserved))
+	return(FALSE);
+
+  for (f = &filp[0]; f < &filp[NR_FILPS]; f++)
+	if (f->filp_rsv_tab == fdt && f->filp_rsv_fd == fd)
+		break;
+  assert(f < &filp[NR_FILPS]);
+
+  /* The reserving call holds the filp's mutex until then. */
+  org_self = worker_suspend();
+  if (mutex_lock(&f->filp_lock) != 0)
+	panic("unable to obtain lock on filp");
+  worker_resume(org_self);
+  if (mutex_unlock(&f->filp_lock) != 0)
+	panic("unable to release lock on filp");
+
+  return(TRUE);
+}
+
+/*===========================================================================*
+ *				unlock_filp				     *
+ *===========================================================================*/
 void
 unlock_filp(struct filp *filp)
 {

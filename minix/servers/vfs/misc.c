@@ -252,8 +252,17 @@ static int dup2fd(struct filp *f, int fd, int fd2, int cloexec)
   unlock_filp(f);
 
   for (;;) {
-	if ((old = fdt->fd_filp[fd2]) == NULL)
+	if ((old = fdt->fd_filp[fd2]) == NULL) {
+		/* Free, unless get_fd() gave it to a call of another thread
+		 * that has yet to install it (open() blocked in a path
+		 * lookup, say).  That call would then overwrite the slot.
+		 * Wait for it to install the descriptor or give up, and look
+		 * again.
+		 */
+		if (wait_fd_reserved(fdt, fd2))
+			continue;
 		break;
+	}
 	/* Locking may block; another thread can close or replace fd2 while it
 	 * does.  Only proceed once the slot still holds the filp we locked.
 	 */
@@ -281,6 +290,46 @@ static int dup2fd(struct filp *f, int fd, int fd2, int cloexec)
   }
 
   return(fd2);
+}
+
+/*===========================================================================*
+ *				do_sigarm				     *
+ *===========================================================================*/
+int do_sigarm(void)
+{
+/* Make pselect(2), pollts(2) and paccept(2) atomic.  These install a signal
+ * mask (in PM), make the call (in VFS), and restore the mask.  A signal that
+ * the new mask unblocks can be caught after the mask is installed but before
+ * VFS has the call; its handler then runs, and the call blocks anyway --
+ * possibly forever, since what the handler was meant to wake it for has
+ * happened.  So the C library first arms the call here:
+ *
+ *  - unpause() (pipe.c), which PM asks for before every caught signal is
+ *    delivered, finds the process not blocked in VFS and only notes it
+ *    (FP_SIGARM_INTR);
+ *  - do_work() (main.c) then finishes the armed call: if a signal was caught
+ *    and the call suspended, it is unpaused at once, failing with EINTR, as
+ *    if the signal had come while it was blocked.  That is also the moment
+ *    a postponed unpause from PM is handled, so a signal caught during the
+ *    call is no different from one caught before it.
+ *
+ * Any other VFS call made in between -- by the signal handler, say -- leaves
+ * the arming alone.  Arming again, or with callnr 0, resets it.
+ */
+  int callnr = job_m_in.m_lc_vfs_sigarm.callnr;
+
+  fp->fp_flags &= ~(FP_SIGARM | FP_SIGARM_INTR);
+  switch (callnr) {
+  case 0:
+	return(OK);
+  case VFS_SELECT:
+  case VFS_ACCEPT:
+	fp->fp_sigarm_call = callnr;
+	fp->fp_flags |= FP_SIGARM;
+	return(OK);
+  default:
+	return(EINVAL);
+  }
 }
 
 /*===========================================================================*

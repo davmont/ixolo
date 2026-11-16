@@ -191,7 +191,8 @@
 #define VFS_FALLOCATE		(VFS_BASE + 91)	/* posix_fallocate(2) */
 #define VFS_KQUEUE		(VFS_BASE + 92)	/* kqueue1(2) */
 #define VFS_KEVENT		(VFS_BASE + 93)	/* kevent(2) */
+#define VFS_SIGARM		(VFS_BASE + 94)	/* pselect(2) etc.: see vfs/misc.c */
 
-#define NR_VFS_CALLS		94	/* highest number from base plus one */
+#define NR_VFS_CALLS		95	/* highest number from base plus one */
 
 #endif /* !_MINIX_CALLNR_H */
