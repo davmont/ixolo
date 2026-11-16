@@ -81,7 +81,10 @@ edit()
     minix-service $opt edit $binlocation -label $service "$@"
 }
 
-set -- `sysenv bootopt` "$@"
+# Boot options: bootopt=-s (single user), -a, -f.  The boot menus used to
+# pass "bootopts", which nothing read; accept it too, for systems whose
+# /etc/boot.cfg.default still has it.
+set -- `sysenv bootopt || sysenv bootopts` "$@"
 while getopts 'saf' opt
 do
     case $opt in

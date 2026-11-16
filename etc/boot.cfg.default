@@ -3,6 +3,6 @@ timeout=5
 default=2
 menu=Start Ixolo:load_mods /boot/minix_default/mod*;multiboot /boot/minix_default/kernel rootdevname=$rootdevname $args
 menu=Start latest Ixolo:load_mods /boot/minix_latest/mod*;multiboot /boot/minix_latest/kernel rootdevname=$rootdevname $args
-menu=Start latest Ixolo in single user mode:load_mods /boot/minix_latest/mod*;multiboot /boot/minix_latest/kernel rootdevname=$rootdevname bootopts=-s $args
+menu=Start latest Ixolo in single user mode:load_mods /boot/minix_latest/mod*;multiboot /boot/minix_latest/kernel rootdevname=$rootdevname bootopt=-s $args
 menu=Edit menu option:edit
 menu=Drop to boot prompt:prompt

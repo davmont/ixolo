@@ -47,7 +47,7 @@ workdir_add_kernel minix/$RELEASE_VERSION
 cat >${ROOT_DIR}/boot.cfg <<END_BOOT_CFG
 menu=Start Ixolo:load_mods /boot/minix_default/mod*; multiboot /boot/minix_default/kernel rootdevname=c0d0p0 no_apic=0 acpi=1 ata_no_dma=1
 menu=Start latest Ixolo:load_mods /boot/minix_latest/mod*; multiboot /boot/minix_latest/kernel rootdevname=c0d0p0 no_apic=0 acpi=1 ata_no_dma=1
-menu=Start latest Ixolo in single user mode:load_mods /boot/minix_latest/mod*; multiboot /boot/minix_latest/kernel rootdevname=c0d0p0 no_apic=0 acpi=1 bootopts=-s ata_no_dma=1
+menu=Start latest Ixolo in single user mode:load_mods /boot/minix_latest/mod*; multiboot /boot/minix_latest/kernel rootdevname=c0d0p0 no_apic=0 acpi=1 bootopt=-s ata_no_dma=1
 menu=Start Ixolo ALIX:load_mods /boot/minix_default/mod*;multiboot /boot/minix_default/kernel rootdevname=c0d0p0 no_apic=0 acpi=1 console=tty00 consdev=com0 ata_no_dma=1
 menu=Start Ixolo (legacy PIC mode):load_mods /boot/minix_latest/mod*; multiboot /boot/minix_latest/kernel rootdevname=c0d0p0 ata_no_dma=1
 menu=Edit menu option:edit
