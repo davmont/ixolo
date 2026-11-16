@@ -31,6 +31,30 @@ getnpid(endpoint_t proc_ep)
 	return getepinfo(proc_ep, NULL, NULL);
 }
 
+/*
+ * The PID of the process that 'proc_ep' belongs to, and in 'leaderp' the
+ * endpoint of its thread-group leader, which stands for the whole process:
+ * per-process state is kept under it, and PM reports the process's exit for
+ * it.  For a process without threads, that is 'proc_ep' itself.
+ */
+pid_t
+getnpidleader(endpoint_t proc_ep, endpoint_t *leaderp)
+{
+	message m;
+	int r;
+
+	memset(&m, 0, sizeof(m));
+	m.m_lsys_pm_getepinfo.endpt = proc_ep;
+	m.m_lsys_pm_getepinfo.groups = (vir_bytes)NULL;
+	m.m_lsys_pm_getepinfo.ngroups = 0;
+
+	if ((r = _taskcall(PM_PROC_NR, PM_GETEPINFO, &m)) < 0)
+		return r;
+
+	*leaderp = m.m_pm_lsys_getepinfo.leader;
+	return (pid_t) r;
+}
+
 uid_t
 getnuid(endpoint_t proc_ep)
 {

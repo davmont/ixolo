@@ -464,10 +464,18 @@ handle_vfs_reply(void)
 
   case VFS_PM_LWP_EXIT_REPLY:
 	/* VFS has released the exiting thread's reference to the shared file
-	 * table; finish destroying the thread. */
-	lwp_exit_finish(rmp);
+	 * table.  Tell the services that want to know (IPC: a thread blocked
+	 * in semop(2) and the like) that the thread is gone, as for a process,
+	 * and only then finish destroying it (resume_event() calls
+	 * lwp_exit_finish()): until they have dropped what they keep for the
+	 * thread, they could still complete a call for it, and its slot must
+	 * not be reused before.  The thread is stopped and idle here
+	 * (lwp_start_teardown() cleared UNPAUSED; tell_vfs() would not have
+	 * started the teardown during an event).
+	 */
+	publish_event(rmp);
 
-	return; /* thread is gone; no default action */
+	return; /* do not take the default action */
 
   case VFS_PM_UNPAUSE_REPLY:
 	/* The target process must always be stopped while unpausing; otherwise
