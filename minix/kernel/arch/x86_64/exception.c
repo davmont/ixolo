@@ -48,7 +48,7 @@ static struct ex_s ex_data[] = {
 
 
 static void proc_stacktrace_execute(struct proc *whichproc, reg_t v_rbp,
-                                    reg_t pc);
+                                    reg_t pc, reg_t ret0);
 
 /*===========================================================================*
  *  pagefault                                                                 *
@@ -309,7 +309,7 @@ void exception_handler(int is_nested, struct exception_frame *frame)
  *===========================================================================*/
 #if USE_SYSDEBUG
 static void proc_stacktrace_execute(struct proc *whichproc, reg_t v_rbp,
-                                    reg_t pc)
+                                    reg_t pc, reg_t ret0)
 {
     reg_t v_hbp;
     int iskernel = iskernelp(whichproc);
@@ -317,6 +317,8 @@ static void proc_stacktrace_execute(struct proc *whichproc, reg_t v_rbp,
 
     printf("%-8.8s %6d 0x%lx ",
            whichproc->p_name, whichproc->p_endpoint, (unsigned long)pc);
+    if (ret0 != 0)
+        printf("0x%lx ", (unsigned long)ret0);
 
 #define PRCOPY(pr, pv, v, n) \
     (iskernel ? (memcpy((char *)(v), (char *)(pv), (n)), OK) : \
@@ -354,35 +356,45 @@ static void proc_stacktrace_execute(struct proc *whichproc, reg_t v_rbp,
  *===========================================================================*/
 void proc_stacktrace(struct proc *whichproc)
 {
-    reg_t use_rbp;
+    reg_t ret0 = 0;
 
     if (whichproc->p_seg.p_kern_trap_style == KTS_NONE)
         printf("WARNING: stacktrace of running process\n");
 
-    switch (whichproc->p_seg.p_kern_trap_style) {
-    case KTS_SYSCALL:
-    {
-        /*
-         * SYSCALL entry does not save RBP into p_reg automatically.
-         * Read it from the user stack (16-byte offset matches the
-         * usermapped IPC stub convention).
-         */
-        reg_t sp = whichproc->p_reg.sp;
-        if (data_copy(whichproc->p_endpoint, sp + 16,
-                      KERNEL, (vir_bytes)&use_rbp,
-                      sizeof(use_rbp)) != OK) {
-            printf("stacktrace: copy failed\n");
-            return;
+    /*
+     * Every way into the kernel saves the process's real RBP in p_reg,
+     * SYSCALL included (syscall_entry in mpx.S), so the RBP chain starts
+     * there.  (i386 had to read it from the user stack, where its stubs
+     * had saved it; the amd64 stubs in usermapped_glo_ipc.S do not.)
+     *
+     * After SYSCALL, though, the process is inside one of those stubs,
+     * which have no frame of their own: the function that called the stub
+     * is not on the RBP chain, only its caller is.  Its return address is
+     * on the user stack under the registers the stub pushed.  The stub's
+     * remaining code is one one-byte pop per push and then a ret, so count
+     * the pops at the saved PC to find it.
+     */
+    if (!iskernelp(whichproc) &&
+        whichproc->p_seg.p_kern_trap_style == KTS_SYSCALL) {
+        unsigned char code[4];
+        int pops = 0;
+
+        if (data_copy(whichproc->p_endpoint, whichproc->p_reg.pc, KERNEL,
+                      (vir_bytes)code, sizeof(code)) == OK) {
+            while (pops < (int)sizeof(code) - 1 &&
+                   code[pops] >= 0x58 && code[pops] <= 0x5f)
+                pops++;                         /* pop %r64 */
+            if (code[pops] != 0xc3 ||           /* ret */
+                data_copy(whichproc->p_endpoint,
+                          whichproc->p_reg.sp + pops * sizeof(reg_t),
+                          KERNEL, (vir_bytes)&ret0, sizeof(ret0)) != OK)
+                ret0 = 0;
         }
-        break;
-    }
-    default:
-        use_rbp = whichproc->p_reg.rbp;
-        break;
     }
 
 #if USE_SYSDEBUG
-    proc_stacktrace_execute(whichproc, use_rbp, whichproc->p_reg.pc);
+    proc_stacktrace_execute(whichproc, whichproc->p_reg.rbp,
+                            whichproc->p_reg.pc, ret0);
 #endif
 }
 
