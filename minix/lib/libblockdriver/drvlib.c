@@ -75,13 +75,13 @@ static void parse_part_table(
   struct part_entry table[NR_PARTITIONS], *pe;
   int disk, par;
   struct device *dv;
-  unsigned long base, limit, part_limit;
+  u64_t base, limit, part_limit;	/* sectors: a GPT disk can be > 2 TiB */
 
   /* Get the geometry of the device to partition */
   if ((dv = (*bdp->bdr_part)(device)) == NULL
 				|| dv->dv_size == 0) return;
-  base = (unsigned long)(dv->dv_base / SECTOR_SIZE);
-  limit = base + (unsigned long)(dv->dv_size / SECTOR_SIZE);
+  base = dv->dv_base / SECTOR_SIZE;
+  limit = base + dv->dv_size / SECTOR_SIZE;
 
   /* Read the partition table for the device. */
   if(!get_part_table(bdp, device, 0L, table, tmp_buf)) {
@@ -120,14 +120,13 @@ static void parse_part_table(
   for (par = 0; par < NR_PARTITIONS; par++, dv++) {
 	/* Shrink the partition to fit within the device. */
 	pe = &table[par];
-	part_limit = pe->lowsec + pe->size;
-	if (part_limit < pe->lowsec) part_limit = limit;
+	part_limit = (u64_t)pe->lowsec + pe->size;
 	if (part_limit > limit) part_limit = limit;
 	if (pe->lowsec < base) pe->lowsec = base;
 	if (part_limit < pe->lowsec) part_limit = pe->lowsec;
 
 	dv->dv_base = (u64_t)pe->lowsec * SECTOR_SIZE;
-	dv->dv_size = (u64_t)(part_limit - pe->lowsec) * SECTOR_SIZE;
+	dv->dv_size = (part_limit - pe->lowsec) * SECTOR_SIZE;
 
 	if (style == P_PRIMARY) {
 		/* Each Minix primary partition can be subpartitioned. */
