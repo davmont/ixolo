@@ -149,6 +149,43 @@ pthread_cond_destroy(pthread_cond_t *cond)
 	return 0;
 }
 
+#ifdef __minix
+static int cond_wait(pthread_cond_t *, pthread_mutex_t *,
+    const struct timespec *, int);
+
+int
+pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
+		       const struct timespec *abstime)
+{
+
+	if (__predict_false(__uselibcstub))
+		return __libc_cond_timedwait_stub(cond, mutex, abstime);
+	if (COND_IS_PSHARED(cond))
+		return pthread__pcond_timedwait(cond, mutex, abstime);
+	return cond_wait(cond, mutex, abstime, 0);
+}
+
+/*
+ * As pthread_cond_timedwait() for a private condition variable, but a signal
+ * caught meanwhile ends the wait with EINTR, as sem_wait(3) must.
+ */
+int
+pthread__cond_timedwait_intr(pthread_cond_t *cond, pthread_mutex_t *mutex,
+    const struct timespec *abstime)
+{
+
+	return cond_wait(cond, mutex, abstime, 1);
+}
+
+static int
+cond_wait(pthread_cond_t *cond, pthread_mutex_t *mutex,
+    const struct timespec *abstime, int intr)
+{
+	struct pthread__waiter waiter, *next, *head;
+	pthread_t self;
+	int error, cancel;
+	clockid_t clkid;
+#else
 int
 pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 		       const struct timespec *abstime)
@@ -160,11 +197,8 @@ pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 
 	if (__predict_false(__uselibcstub))
 		return __libc_cond_timedwait_stub(cond, mutex, abstime);
-
-#ifdef __minix
-	if (COND_IS_PSHARED(cond))
-		return pthread__pcond_timedwait(cond, mutex, abstime);
 #endif
+
 	clkid = pthread_cond_getclock(cond);
 	pthread__error(EINVAL, "Invalid condition variable",
 	    cond->ptc_magic == _PT_COND_MAGIC);
@@ -224,6 +258,12 @@ pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 			error = errno;
 			break;
 		}
+#ifdef __minix
+		if (intr && errno == EINTR) {
+			error = EINTR;
+			break;
+		}
+#endif
 	}
 	pthread_mutex_lock(mutex);
 

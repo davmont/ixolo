@@ -74,6 +74,7 @@ struct mqwait {
 	unsigned int	prio;
 	unsigned long	seq;		/* arrival order */
 	int		timed;
+	u64_t		due;		/* uptime_ns() it times out at */
 	minix_timer_t	tmr;
 };
 
@@ -278,6 +279,10 @@ mq_timeout(int arg)
 	w = &mq_wait[arg];
 	if (w->op == OP_NONE)
 		return;
+	if (uptime_ns(NULL) < w->due) {	/* too far off to wait in one go */
+		set_timer(&w->tmr, deadline_ticks(w->due), mq_timeout, arg);
+		return;
+	}
 	w->timed = 0;				/* the timer is gone already */
 	mq_reply(w, ETIMEDOUT, 0, 0);
 	mq_update_sub();
@@ -292,11 +297,9 @@ static int
 mq_block(message *m, struct mq *mq, int op)
 {
 	struct mqwait *w;
-	clock_t uptime, realtime, ticks;
-	time_t boottime;
-	int64_t sec, now_ticks, deadline;
-	long nsec;
-	int r, hz;
+	clock_t ticks;
+	u64_t due = 0;
+	int r;
 
 	if (m->m_lc_ipc_mqio.flags & IPC_MQ_NONBLOCK)
 		return EAGAIN;
@@ -304,21 +307,12 @@ mq_block(message *m, struct mq *mq, int op)
 	w = &mq_wait[_ENDPOINT_P(m->m_source)];
 	ticks = 0;
 	if (m->m_lc_ipc_mqio.flags & IPC_MQ_TIMED) {
-		sec = m->m_lc_ipc_mqio.tv_sec;
-		nsec = m->m_lc_ipc_mqio.tv_nsec;
-		if (nsec < 0 || nsec >= 1000000000L)
-			return EINVAL;
-		if ((r = getuptime(&uptime, &realtime, &boottime)) != OK)
+		/* A time on the clock: for CLOCK_REALTIME, as it is now (it
+		 * is not moved by clock_settime(2) while we wait). */
+		if ((r = abs_deadline_ns(1,
+		    m->m_lc_ipc_mqio.tv_sec, m->m_lc_ipc_mqio.tv_nsec, &due)) != OK)
 			return r;
-		hz = sys_hz();
-		now_ticks = (int64_t)boottime * hz + realtime;
-		deadline = sec * hz + ((int64_t)nsec * hz + 999999999) /
-		    1000000000;
-		if (deadline <= now_ticks)
-			return ETIMEDOUT;
-		if (deadline - now_ticks > TMRDIFF_MAX)
-			deadline = now_ticks + TMRDIFF_MAX;
-		ticks = (clock_t)(deadline - now_ticks);
+		ticks = deadline_ticks(due);
 	}
 
 	w->op = op;
@@ -329,6 +323,7 @@ mq_block(message *m, struct mq *mq, int op)
 	w->prio = m->m_lc_ipc_mqio.prio;
 	w->seq = ++mq_seq;
 	w->timed = (ticks > 0);
+	w->due = due;
 	if (w->timed)
 		set_timer(&w->tmr, ticks, mq_timeout,
 		    (int)_ENDPOINT_P(m->m_source));

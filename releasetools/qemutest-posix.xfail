@@ -23,15 +23,8 @@ interfaces/clock/1-1                                     flaky  # timing: passed
 interfaces/clock/2-1                                     # fail
 
 # interfaces/clock_nanosleep
-interfaces/clock_nanosleep/13-1                          # fail
 
 # interfaces/clock_settime
-interfaces/clock_settime/19-1                            # fail
-interfaces/clock_settime/4-1                             # fail
-interfaces/clock_settime/4-2                             # fail
-interfaces/clock_settime/7-1                             # fail
-interfaces/clock_settime/7-2                             # fail
-interfaces/clock_settime/speculative/4-3                 # fail
 
 # interfaces/fork
 interfaces/fork/18-1                                     # unresolved
@@ -53,11 +46,8 @@ interfaces/mmap/11-4                                     # fail: a later mapping
 interfaces/mq_close/2-1                                  # fail
 
 # interfaces/mq_timedreceive
-interfaces/mq_timedreceive/5-1                           # fail
 
 # interfaces/mq_timedsend
-interfaces/mq_timedsend/5-1                              # fail
-interfaces/mq_timedsend/5-2                              # fail
 
 # interfaces/munlock
 
@@ -71,7 +61,6 @@ interfaces/nanosleep/2-1                                 # unresolved
 interfaces/pthread_atfork/3-3                            # timeout
 
 # interfaces/pthread_cond_broadcast
-interfaces/pthread_cond_broadcast/2-3                    # nobuild
 interfaces/pthread_cond_broadcast/4-2                    # unresolved
 
 # interfaces/pthread_cond_destroy
@@ -150,7 +139,6 @@ interfaces/sem_open/5-1                                  # fail
 interfaces/sem_post/8-1                                  # unresolved
 
 # interfaces/sem_timedwait
-interfaces/sem_timedwait/9-1                             # fail
 
 # interfaces/sem_unlink
 interfaces/sem_unlink/3-1                                # unresolved

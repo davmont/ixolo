@@ -37,6 +37,10 @@
 
 #define	SEM_MAGIC	0x90af5b3eU
 
+/* pthread_cond.c: a condition wait that a caught signal ends with EINTR. */
+int	pthread__cond_timedwait_intr(pthread_cond_t *, pthread_mutex_t *,
+    const struct timespec *) __attribute__((__visibility__("hidden")));
+
 struct _sem_st {
 	unsigned int	sem_magic;
 	pthread_mutex_t	sem_lock;
@@ -172,21 +176,29 @@ int
 sem_wait(sem_t *sem)
 {
 	struct _sem_st *s;
+	int error = 0;
 
 	if (sem != NULL && SEM_IS_SHARED(*sem))
 		return psem_op(IPC_PSEM_WAIT, *sem, 0, NULL) < 0 ? -1 : 0;
 	if (!sem_valid(sem))
 		return -1;
 
+	/* A signal caught while we wait ends it with EINTR. */
 	s = *sem;
 	(void)pthread_mutex_lock(&s->sem_lock);
-	while (s->sem_count == 0) {
+	while (s->sem_count == 0 && error == 0) {
 		s->sem_nwaiters++;
-		(void)pthread_cond_wait(&s->sem_cond, &s->sem_lock);
+		error = pthread__cond_timedwait_intr(&s->sem_cond,
+		    &s->sem_lock, NULL);
 		s->sem_nwaiters--;
 	}
-	s->sem_count--;
+	if (error == 0)
+		s->sem_count--;
 	(void)pthread_mutex_unlock(&s->sem_lock);
+	if (error != 0) {
+		errno = error;
+		return -1;
+	}
 	return 0;
 }
 
@@ -235,8 +247,8 @@ sem_timedwait(sem_t *sem, const struct timespec * __restrict abstime)
 	(void)pthread_mutex_lock(&s->sem_lock);
 	while (s->sem_count == 0 && error == 0) {
 		s->sem_nwaiters++;
-		error = pthread_cond_timedwait(&s->sem_cond, &s->sem_lock,
-		    abstime);
+		error = pthread__cond_timedwait_intr(&s->sem_cond,
+		    &s->sem_lock, abstime);
 		s->sem_nwaiters--;
 	}
 	if (error == 0) {
@@ -244,7 +256,7 @@ sem_timedwait(sem_t *sem, const struct timespec * __restrict abstime)
 	}
 	(void)pthread_mutex_unlock(&s->sem_lock);
 	if (error != 0) {
-		errno = error;	/* ETIMEDOUT or EINVAL from cond_timedwait */
+		errno = error;	/* ETIMEDOUT, EINTR or EINVAL */
 		return -1;
 	}
 	return 0;

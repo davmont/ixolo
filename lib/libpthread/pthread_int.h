@@ -373,6 +373,8 @@ int	pthread__pcond_init(pthread_cond_t *, clockid_t) PTHREAD_HIDE;
 int	pthread__pcond_destroy(pthread_cond_t *) PTHREAD_HIDE;
 int	pthread__pcond_timedwait(pthread_cond_t *, pthread_mutex_t *,
     const struct timespec *) PTHREAD_HIDE;
+int	pthread__cond_timedwait_intr(pthread_cond_t *, pthread_mutex_t *,
+    const struct timespec *) PTHREAD_HIDE;
 int	pthread__pcond_signal(pthread_cond_t *, int) PTHREAD_HIDE;
 int	pthread__prwlock_init(pthread_rwlock_t *) PTHREAD_HIDE;
 int	pthread__prwlock_destroy(pthread_rwlock_t *) PTHREAD_HIDE;
