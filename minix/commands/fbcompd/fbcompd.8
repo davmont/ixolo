@@ -1,0 +1,167 @@
+.Dd November 15, 2026
+.Dt FBCOMPD 8
+.Os
+.Sh NAME
+.Nm fbcompd
+.Nd simple framebuffer compositor
+.Sh SYNOPSIS
+.Nm
+.Op Ar font
+.Sh DESCRIPTION
+The
+.Nm
+daemon is a small compositor that draws client windows on the
+framebuffer
+.Pa /dev/fb0 .
+It is a proof of concept and predates
+.Xr wlcompd 8 .
+It does not speak Wayland.
+.Pp
+Clients connect to the
+.Ux Ns -domain
+stream socket
+.Pa /tmp/fbcompd.sock .
+Each client draws its window into a System V shared-memory segment and
+sends the segment ID to
+.Nm .
+The protocol is defined in
+.In fbcomp_proto.h .
+Every message is one fixed-size
+.Vt struct fbc_msg .
+.Pp
+.Nm
+serves at most 16 clients and 16 windows.
+A window may be at most 4096 by 4096 pixels.
+.Nm
+copies the pixels from the segment only when the client commits, so a
+client that is still drawing cannot tear the picture.
+When a client goes away,
+.Nm
+removes its shared-memory segment.
+.Pp
+The optional
+.Ar font
+argument is the path of a TrueType font used for titles.
+If it is not given, the font named by
+.Ev FBCOMPD_FONT
+is used, and then
+.Pa /usr/share/fonts/TTF/DejaVuSansMono.ttf .
+If the font cannot be loaded, windows have no title text.
+.Pp
+.Nm
+does not detach from the terminal.
+.Ss Windows
+Each window has a title bar with its title and three boxes at the
+right end: minimize, maximize and close.
+A resize grip is drawn in the bottom-right corner.
+The topmost window that is not minimized has the keyboard focus and a
+brighter title bar.
+.Pp
+Only the left mouse button is used.
+.Bl -bullet
+.It
+A click on a window raises it.
+.It
+Dragging the title bar moves the window.
+Moving a maximized window ends the maximized state.
+.It
+The close box tells the client its window is closed and removes it.
+.It
+The maximize box makes the window fill the screen, or restores its old
+size and position.
+.It
+The minimize box hides the window and puts a button for it on a
+taskbar along the bottom of the screen.
+A click on that button restores the window.
+The taskbar is only shown while a window is minimized.
+.It
+Dragging the resize grip asks the client to reallocate its window at the
+new size.
+The smallest size is 80 by 48 pixels.
+.It
+A click inside a window is passed to its client, with the position
+relative to the window.
+.El
+.Ss Keyboard
+Key presses and releases go to the focused window.
+Each key event carries the USB HID key code, an ASCII character for keys
+on a US layout, and the state of the Shift, Control and Alt keys.
+The modifier keys themselves are not sent.
+.Sh ENVIRONMENT
+.Bl -tag -width FBCOMPD_FONT
+.It Ev FBCOMPD_FONT
+Path of the title font, used if no
+.Ar font
+argument is given.
+.El
+.Sh FILES
+.Bl -tag -width /usr/share/fonts/TTF/DejaVuSansMono.ttf -compact
+.It Pa /dev/fb0
+The framebuffer.
+.It Pa /dev/kbdmux
+The keyboard.
+.Pa /dev/kbd0
+is tried if it cannot be opened.
+.It Pa /dev/mousemux
+The mouse.
+.Pa /dev/mouse0
+is tried if it cannot be opened.
+.It Pa /tmp/fbcompd.sock
+The listening socket.
+Any old socket is removed at start-up.
+.It Pa /tmp/COMP
+The log.
+It is truncated at start-up.
+If it cannot be created, the log goes to standard output.
+.It Pa /usr/share/fonts/TTF/DejaVuSansMono.ttf
+The default title font.
+.It Pa /etc/rc.d/fbcompd
+Starts
+.Nm
+at boot when
+.Va fbcompd
+is set to
+.Dq YES
+in
+.Xr rc.conf 5 .
+.Va fbcompd_flags
+is passed as arguments, so it can name a font.
+The process ID is recorded in
+.Pa /var/run/fbcompd.pid .
+.El
+.Sh EXIT STATUS
+.Nm
+exits 1 if it cannot open the framebuffer or set up its socket.
+It exits 0 if
+.Xr select 2
+fails.
+Otherwise it runs until it is killed.
+.Sh SEE ALSO
+.Xr wlclient 1 ,
+.Xr select 2 ,
+.Xr shmget 2 ,
+.Xr rc.conf 5 ,
+.Xr minix-service 8 ,
+.Xr wlcompd 8
+.Sh HISTORY
+The
+.Nm
+daemon first appeared in Ixolo 0.1.
+.Sh CAVEATS
+.Nm
+and
+.Xr wlcompd 8
+must not run at the same time.
+Both use the framebuffer and the keyboard.
+.Pp
+While
+.Nm
+holds
+.Pa /dev/kbdmux ,
+the console no longer receives keyboard input.
+.Sh BUGS
+Only the left mouse button is supported, and only presses are passed to
+clients.
+Mouse motion and releases are not.
+.Pp
+The ASCII translation knows only a US keyboard layout.

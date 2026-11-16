@@ -10,7 +10,7 @@
 .include "${NETBSDSRCDIR}/external/mit/wayland/Makefile.inc"
 
 PROG=	wlcompd
-MAN=
+MAN=	wlcompd.8
 
 SRCS=	wlcompd.c xdg-shell-protocol.c wlr-layer-shell-protocol.c \
 	wlr-foreign-toplevel-protocol.c ext-workspace-protocol.c \

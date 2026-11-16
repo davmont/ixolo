@@ -1,5 +1,5 @@
 PROG=	wlcoreprobe
-MAN=
+MAN=	wlcoreprobe.1
 
 .include <bsd.own.mk>
 

@@ -1,0 +1,100 @@
+.Dd November 15, 2026
+.Dt WLPROBE 1
+.Os
+.Sh NAME
+.Nm wlprobe
+.Nd check the shared-memory primitives that Wayland needs
+.Sh SYNOPSIS
+.Nm
+.Sh DESCRIPTION
+The
+.Nm
+utility checks, one step at a time, the shared-memory path that a
+Wayland client uses to hand its pixels to the compositor.
+If a step breaks, the output shows which one.
+.Nm
+takes no arguments.
+.Pp
+It checks, in order, that:
+.Bl -enum
+.It
+.Xr shm_open 3
+creates a new object with
+.Dv O_CREAT
+and
+.Dv O_EXCL .
+.It
+.Xr ftruncate 2
+sets its size to 4096 bytes, and
+.Xr fstat 2
+reports that size.
+.It
+The object can be mapped with
+.Dv MAP_SHARED
+and
+.Dv PROT_WRITE ,
+and a value written through the mapping reads back.
+.It
+The file descriptor can be passed to a child process with an
+.Dv SCM_RIGHTS
+message over a
+.Xr socketpair 2 .
+The child maps it and must see the parent's write.
+The parent must then see a value written by the child.
+This shows that the mapping is really shared and not copy-on-write.
+.It
+The object can be grown to 8192 bytes and mapped again at the new size.
+The old contents must survive, and the new end must be writable.
+.It
+A second object can be unlinked right after it is opened, and then
+still be sized, mapped and written through its file descriptor.
+This is what real Wayland clients do.
+.It
+.Xr shm_unlink 3
+removes the first name, the existing mapping keeps working, and a
+second unlink of the same name fails with
+.Er ENOENT .
+.El
+.Pp
+Each check prints one line ending in
+.Dq OK
+or in
+.Dq FAIL
+with a reason.
+The last line is
+.Dq ALL PASS
+or
+.Dq FAILURES PRESENT .
+.Sh FILES
+.Nm
+uses the shared-memory names
+.Pa /wlprobe-pool
+and
+.Pa /wlprobe-anon .
+A stale
+.Pa /wlprobe-pool
+from an earlier run is removed first.
+.Sh EXIT STATUS
+.Nm
+exits 0 if every check passes, and 1 otherwise.
+It stops early, with status 1, if the first
+.Xr shm_open 3
+or
+.Xr mmap 2
+fails, or if
+.Xr socketpair 2 ,
+.Xr fork 2
+or
+.Xr waitpid 2
+fails.
+.Sh SEE ALSO
+.Xr wlclient 1 ,
+.Xr wlcoreprobe 1 ,
+.Xr mmap 2 ,
+.Xr socketpair 2 ,
+.Xr shm_open 3 ,
+.Xr wlcompd 8
+.Sh HISTORY
+The
+.Nm
+utility first appeared in Ixolo 0.1.

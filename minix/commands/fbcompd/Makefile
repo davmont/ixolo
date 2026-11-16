@@ -7,7 +7,7 @@
 .include <bsd.own.mk>
 
 PROG=	fbcompd
-MAN=
+MAN=	fbcompd.8
 
 # pixman and freetype headers live in their own subdirectories.
 CPPFLAGS+=	-I${DESTDIR}/usr/include/pixman-1

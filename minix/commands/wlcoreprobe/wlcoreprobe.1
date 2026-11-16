@@ -1,0 +1,95 @@
+.Dd November 15, 2026
+.Dt WLCOREPROBE 1
+.Os
+.Sh NAME
+.Nm wlcoreprobe
+.Nd check the libwayland event loop
+.Sh SYNOPSIS
+.Nm
+.Sh DESCRIPTION
+The
+.Nm
+utility checks the event loop of
+the libwayland-server library.
+That event loop is written for Linux epoll, timerfd, signalfd and
+eventfd.
+MINIX has none of these, so Ixolo emulates them on top of
+.Xr poll 2 .
+.Nm
+drives the real event loop through each emulated part.
+It takes no arguments.
+.Pp
+It checks, in order, that:
+.Bl -enum
+.It
+A file descriptor source fires exactly once when a pipe becomes
+readable.
+This tests the epoll emulation.
+.It
+An idle source runs exactly once.
+.It
+A timer set for 60 milliseconds fires, and not before about
+55 milliseconds have passed.
+A timer that has been disarmed does not fire.
+This tests the timerfd emulation.
+.It
+A signal source fires when the process raises
+.Dv SIGUSR1 .
+This tests the signalfd emulation.
+.It
+A display can be created, can advertise
+.Li wl_shm ,
+and can create a listening socket, and the socket exists on disk.
+.It
+.Fn wl_display_run
+returns after a timer calls
+.Fn wl_display_terminate
+100 milliseconds later.
+This tests the eventfd emulation.
+.El
+.Pp
+Each check prints one line ending in
+.Dq OK
+or in
+.Dq FAIL
+with a reason.
+The path of the listening socket is also printed.
+The last line is
+.Dq ALL PASS
+or
+.Dq FAILURES PRESENT .
+.Sh ENVIRONMENT
+.Bl -tag -width XDG_RUNTIME_DIR
+.It Ev XDG_RUNTIME_DIR
+The directory in which the test socket is created.
+If it is not set,
+.Nm
+sets it to
+.Pa /tmp .
+.El
+.Sh FILES
+.Bl -tag -width Ds
+.It Pa $XDG_RUNTIME_DIR/wayland- Ns Ar N
+The test socket.
+.Ar N
+is the first free number from 0 to 32.
+It is removed when the display is destroyed at the end of the run.
+.El
+.Sh EXIT STATUS
+.Nm
+exits 0 if every check passes, and 1 otherwise.
+It stops early, with status 1, if it cannot create the event loop, the
+pipe or the display.
+.Sh SEE ALSO
+.Xr wlclient 1 ,
+.Xr wlprobe 1 ,
+.Xr poll 2 ,
+.Xr wlcompd 8
+.Sh HISTORY
+The
+.Nm
+utility first appeared in Ixolo 0.1.
+.Sh BUGS
+If the eventfd emulation is broken,
+.Nm
+hangs in the last check instead of failing.
