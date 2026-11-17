@@ -146,18 +146,18 @@ int do_fork(message *msg)
   if((r=pt_bind(&vmc->vm_pt, vmc)) != OK)
 	panic("fork can't pt_bind: %d", r);
 
-  {
-	vir_bytes vir;
-	/* making these messages writable is an optimisation
-	 * and its return value needn't be checked.
-	 */
-	vir = msgaddr;
-	if (handle_memory_once(vmc, vir, sizeof(message), 1) != OK)
-	    panic("do_fork: handle_memory for child failed\n");
-	vir = msgaddr;
-	if (handle_memory_once(src, vir, sizeof(message), 1) != OK)
-	    panic("do_fork: handle_memory for parent failed\n");
-  }
+  /* Making the message pages writable now, rather than at the first
+   * write after the fork, saves the kernel a copy-on-write fault when
+   * it delivers the fork's reply.  It is only an optimisation: if
+   * memory is short, the fault comes later and is handled, or fails,
+   * like any other.  The kernel has already forked, so this cannot
+   * fail the fork; and it must not panic VM, which took the whole
+   * system down on a machine that was merely out of memory.
+   */
+  if (handle_memory_once(vmc, msgaddr, sizeof(message), 1) != OK)
+	printf("VM: fork: no memory to prefault the child's message\n");
+  if (handle_memory_once(src, msgaddr, sizeof(message), 1) != OK)
+	printf("VM: fork: no memory to prefault the parent's message\n");
 
   /* Inform caller of new child endpoint. */
   msg->VMF_CHILD_ENDPOINT = vmc->vm_endpoint;
