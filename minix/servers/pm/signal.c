@@ -1513,10 +1513,11 @@ unpause(
   if (rmp->mp_flags & DELAY_CALL)
 	return FALSE;
 
-  /* Check to see if process is hanging on a WAIT, SIGSUSPEND, SIGTIMEDWAIT
-   * or _lwp_park call.
+  /* Check to see if process is hanging on a WAIT, SIGSUSPEND, SIGTIMEDWAIT,
+   * _lwp_park or _lwp_wait call.
    */
-  if (rmp->mp_flags & (WAITING | SIGSUSPENDED | SIGWAITING | MP_LWP_PARKED)) {
+  if (rmp->mp_flags & (WAITING | SIGSUSPENDED | SIGWAITING | MP_LWP_PARKED |
+      MP_LWP_JOINING)) {
 	/* Stop the process from running. Do not interrupt the actual call yet.
 	 * sig_send() will interrupt the call and resume the process afterward.
 	 * No delay calls: we know for a fact that the process called us.
@@ -1632,16 +1633,19 @@ sig_send(
   /* Was the process suspended in PM? Then interrupt the blocking call:
    * with EINTR, or -- for a wait() and a handler with SA_RESTART -- with
    * ERESTARTSYS, which makes the C library call again.  sigsuspend() always
-   * returns EINTR (POSIX), and so do sigtimedwait() and _lwp_park(), as on
-   * NetBSD: libpthread parks again if it must. */
-  if (rmp->mp_flags & (WAITING | SIGSUSPENDED | SIGWAITING | MP_LWP_PARKED)) {
+   * returns EINTR (POSIX), and so do sigtimedwait(), _lwp_park() and
+   * _lwp_wait(), as on NetBSD: libpthread parks or joins again if it must. */
+  if (rmp->mp_flags & (WAITING | SIGSUSPENDED | SIGWAITING | MP_LWP_PARKED |
+      MP_LWP_JOINING)) {
 	int restart = (rmp->mp_flags & WAITING) && (sigflags & SA_RESTART);
 	int parked = (rmp->mp_flags & MP_LWP_PARKED);
 
 	if (rmp->mp_flags & (SIGWAITING | MP_LWP_PARKED))
 		cancel_timer(&rmp->mp_park_timer);
+	if (rmp->mp_flags & MP_LWP_JOINING)
+		rmp->mp_lwp_jointgt = 0;
 	rmp->mp_flags &= ~(WAITING | SIGSUSPENDED | SIGWAITING |
-		MP_LWP_PARKED);
+		MP_LWP_PARKED | MP_LWP_JOINING);
 	if (parked)
 		sched_inherit_parked(rmp);
 

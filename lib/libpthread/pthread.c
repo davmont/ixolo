@@ -210,8 +210,10 @@ pthread__cancel_handler(int sig)
 	pthread_t self = pthread__self();
 
 	if (self->pt_cancel && !(self->pt_flags & PT_FLAG_CS_DISABLED) &&
-	    ((self->pt_flags & PT_FLAG_CS_ASYNC) || self->pt_cancelpt > 0))
+	    ((self->pt_flags & PT_FLAG_CS_ASYNC) || self->pt_cancelpt > 0)) {
+		pthread__pcond_cancel(self);
 		pthread__cancelled();
+	}
 }
 #endif
 
@@ -362,6 +364,7 @@ pthread__scrubthread(pthread_t t, char *name, int flags)
 	t->pt_cancel = 0;
 #ifdef __minix
 	t->pt_cancelpt = 0;	/* may have exited in a cancellation point */
+	t->pt_pcondmtx = NULL;
 #endif
 	t->pt_errno = 0;
 	t->pt_name = name;

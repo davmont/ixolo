@@ -137,6 +137,10 @@ struct	__pthread_st {
 #ifdef __minix
 	volatile int	pt_cancelpt;	/* In a cancellation point: see
 					 * pthread_cancelstub.c */
+	/* Waiting on a process-shared condition variable: see
+	 * pthread__pcond_timedwait(). */
+	pthread_cond_t * volatile pt_pcond;
+	pthread_mutex_t * volatile pt_pcondmtx;
 #endif
 
 	/* Thread-specific data.  Large so it sits close to the end. */
@@ -318,6 +322,16 @@ int	pthread__checkpri(int) PTHREAD_HIDE;
 #define	_PT_RWLOCK_PSHARED_MAGIC	0x99990019
 #define	_PT_BARRIER_PSHARED_MAGIC	0x88880018
 
+/*
+ * A zero-filled mutex or condition variable is the same as one set to its
+ * static initializer but for the magic.  glibc takes such an object as
+ * initialized, and programs written for Linux (and some tests) rely on it,
+ * so set the magic on first use rather than return EINVAL.
+ */
+#define	PTHREAD__LAZY_MAGIC(magicp, magic)				\
+	((void)(*(magicp) == 0 &&					\
+	    atomic_cas_uint((magicp), 0, (magic)) == 0))
+
 struct pthread__pmutex {
 	unsigned int	pm_magic;
 	int		pm_id;
@@ -376,6 +390,7 @@ int	pthread__pcond_timedwait(pthread_cond_t *, pthread_mutex_t *,
 int	pthread__cond_timedwait_intr(pthread_cond_t *, pthread_mutex_t *,
     const struct timespec *) PTHREAD_HIDE;
 int	pthread__pcond_signal(pthread_cond_t *, int) PTHREAD_HIDE;
+void	pthread__pcond_cancel(pthread_t) PTHREAD_HIDE;
 int	pthread__prwlock_init(pthread_rwlock_t *) PTHREAD_HIDE;
 int	pthread__prwlock_destroy(pthread_rwlock_t *) PTHREAD_HIDE;
 int	pthread__prwlock_rdlock(pthread_rwlock_t *, const struct timespec *,

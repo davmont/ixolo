@@ -239,6 +239,7 @@ pthread_mutex_lock(pthread_mutex_t *ptm)
 #ifdef __minix
 	if (MUTEX_IS_PSHARED(ptm))
 		return pthread__pmutex_lock(ptm, NULL);
+	PTHREAD__LAZY_MAGIC(&ptm->ptm_magic, _PT_MUTEX_MAGIC);
 #endif
 	pthread__error(EINVAL, "Invalid mutex",
 	    ptm->ptm_magic == _PT_MUTEX_MAGIC);
@@ -263,6 +264,7 @@ pthread_mutex_timedlock(pthread_mutex_t* ptm, const struct timespec *ts)
 #ifdef __minix
 	if (MUTEX_IS_PSHARED(ptm))
 		return pthread__pmutex_lock(ptm, ts);
+	PTHREAD__LAZY_MAGIC(&ptm->ptm_magic, _PT_MUTEX_MAGIC);
 #endif
 	pthread__error(EINVAL, "Invalid mutex",
 	    ptm->ptm_magic == _PT_MUTEX_MAGIC);
@@ -422,7 +424,15 @@ pthread__mutex_lock_slow(pthread_mutex_t *ptm, const struct timespec *ts)
 		while (waiter.lid != 0) {
 			error = _lwp_park(CLOCK_REALTIME, TIMER_ABSTIME,
 			    __UNCONST(ts), 0, NULL, NULL);
+#ifdef __minix
+			/* An invalid abs_timeout is EINVAL, but only once we
+			 * would block; parking again would spin for ever. */
+			if (error < 0 && (errno == ETIMEDOUT || errno == EINVAL)) {
+				error = errno;
+#else
 			if (error < 0 && errno == ETIMEDOUT) {
+				error = ETIMEDOUT;
+#endif
 				/* Remove self from waiters list */
 				pthread__mutex_wakeup(self,
 				    atomic_swap_ptr(&ptm->ptm_waiters, NULL));
@@ -447,7 +457,7 @@ pthread__mutex_lock_slow(pthread_mutex_t *ptm, const struct timespec *ts)
 				if (MUTEX_PROTECT(owner))
 					(void)_sched_protect(-1);
 				errno = serrno;
-				return ETIMEDOUT;
+				return error;
 			}
 		}
 #ifdef __minix
@@ -470,6 +480,7 @@ pthread_mutex_trylock(pthread_mutex_t *ptm)
 #ifdef __minix
 	if (MUTEX_IS_PSHARED(ptm))
 		return pthread__pmutex_trylock(ptm);
+	PTHREAD__LAZY_MAGIC(&ptm->ptm_magic, _PT_MUTEX_MAGIC);
 #endif
 	pthread__error(EINVAL, "Invalid mutex",
 	    ptm->ptm_magic == _PT_MUTEX_MAGIC);

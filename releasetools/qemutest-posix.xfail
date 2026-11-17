@@ -61,23 +61,21 @@ interfaces/nanosleep/2-1                                 # unresolved
 interfaces/pthread_atfork/3-3                            # timeout
 
 # interfaces/pthread_cond_broadcast
-interfaces/pthread_cond_broadcast/4-2                    # unresolved
+interfaces/pthread_cond_broadcast/4-2                    # timeout
 
 # interfaces/pthread_cond_destroy
 interfaces/pthread_cond_destroy/2-1                      # nobuild
 
 # interfaces/pthread_cond_signal
-interfaces/pthread_cond_signal/4-2                       # unresolved
+interfaces/pthread_cond_signal/4-2                       # timeout
 
 # interfaces/pthread_cond_timedwait
-interfaces/pthread_cond_timedwait/2-3                    # unresolved
-interfaces/pthread_cond_timedwait/2-6                    # nobuild
-interfaces/pthread_cond_timedwait/4-2                    # nobuild
+interfaces/pthread_cond_timedwait/2-3                    # fail: unlocks a mutex held by an exited thread (undefined), EPERM as on NetBSD
+interfaces/pthread_cond_timedwait/4-2                    # fail
 interfaces/pthread_cond_timedwait/4-3                    # timeout
 
 # interfaces/pthread_cond_wait
-interfaces/pthread_cond_wait/2-3                         # nobuild
-interfaces/pthread_cond_wait/4-1                         # unresolved
+interfaces/pthread_cond_wait/4-1                         # timeout
 
 # interfaces/pthread_condattr_destroy
 interfaces/pthread_condattr_destroy/4-1                  # signal
@@ -98,8 +96,6 @@ interfaces/pthread_exit/6-1                              # unresolved
 interfaces/pthread_kill/8-1                              # timeout
 
 # interfaces/pthread_mutex_timedlock
-interfaces/pthread_mutex_timedlock/5-1                   # timeout
-interfaces/pthread_mutex_timedlock/5-2                   # timeout
 
 # interfaces/pthread_mutex_trylock
 interfaces/pthread_mutex_trylock/4-3                     # nobuild
