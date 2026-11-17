@@ -351,48 +351,94 @@ static void proc_stacktrace_execute(struct proc *whichproc, reg_t v_rbp,
 }
 #endif /* USE_SYSDEBUG */
 
+#if USE_SYSDEBUG
+/*===========================================================================*
+ *  stub_return_address                                                       *
+ *===========================================================================*/
+static reg_t stub_return_address(struct proc *p)
+{
+/*
+ * A process that entered with SYSCALL, or with "int" from a usermapped
+ * softint stub, is stopped inside an IPC stub (usermapped_glo_ipc.S, or
+ * libc's _ipc.S and ipc_minix_kerninfo.S).  The stubs have no frame of
+ * their own, so the function that called the stub is not on the RBP chain,
+ * only its caller is.  Its return address is on the user stack under the
+ * registers the stub pushed.  Decode the rest of the stub at the saved PC
+ * to find how many: it is one-byte pops, possibly with a store of the
+ * kernel's result through a register between them, e.g.
+ *
+ *   5b c3                  pop %rbx; ret            (send, sendrec, ...)
+ *   59 89 19 5b c3         pop %rcx; movl %ebx,(%rcx); pop %rbx; ret
+ *   48 89 1a 5b c3         mov %rbx,(%rdx); pop %rbx; ret
+ *   59 48 89 19 5b c3      pop %rcx; mov %rbx,(%rcx); pop %rbx; ret
+ *
+ * Anything else, and the address is not known: return 0.
+ */
+    unsigned char code[8];
+    reg_t ret0;
+    int i, n = 0, pops = 0;
+
+    /* Byte by byte: the stub may end close to the end of its page. */
+    while (n < (int)sizeof(code) &&
+           data_copy(p->p_endpoint, p->p_reg.pc + n, KERNEL,
+             (vir_bytes)&code[n], 1) == OK)
+        n++;
+
+    for (i = 0; i < n; ) {
+        if (code[i] == 0xc3) {                /* ret */
+            if (data_copy(p->p_endpoint,
+                      p->p_reg.sp + pops * sizeof(reg_t),
+                      KERNEL, (vir_bytes)&ret0,
+                      sizeof(ret0)) != OK)
+                return 0;
+            return ret0;
+        }
+        if (code[i] >= 0x58 && code[i] <= 0x5f) {    /* pop %r64 */
+            pops++;
+            i++;
+            continue;
+        }
+        /* mov %r32/%r64 to (%reg): [REX.W] 89, ModRM mod 00 with no
+         * SIB (rm 4) or disp32 (rm 5); it leaves the stack alone. */
+        if (code[i] == 0x48)
+            i++;
+        if (i + 1 < n && code[i] == 0x89 && (code[i + 1] & 0xc0) == 0 &&
+            (code[i + 1] & 7) != 4 && (code[i + 1] & 7) != 5) {
+            i += 2;
+            continue;
+        }
+        break;
+    }
+    return 0;
+}
+#endif /* USE_SYSDEBUG */
+
 /*===========================================================================*
  *  proc_stacktrace                                                           *
  *===========================================================================*/
 void proc_stacktrace(struct proc *whichproc)
 {
+#if USE_SYSDEBUG
     reg_t ret0 = 0;
+#endif
 
     if (whichproc->p_seg.p_kern_trap_style == KTS_NONE)
         printf("WARNING: stacktrace of running process\n");
 
+#if USE_SYSDEBUG
     /*
      * Every way into the kernel saves the process's real RBP in p_reg,
      * SYSCALL included (syscall_entry in mpx.S), so the RBP chain starts
      * there.  (i386 had to read it from the user stack, where its stubs
      * had saved it; the amd64 stubs in usermapped_glo_ipc.S do not.)
-     *
-     * After SYSCALL, though, the process is inside one of those stubs,
-     * which have no frame of their own: the function that called the stub
-     * is not on the RBP chain, only its caller is.  Its return address is
-     * on the user stack under the registers the stub pushed.  The stub's
-     * remaining code is one one-byte pop per push and then a ret, so count
-     * the pops at the saved PC to find it.
+     * A process inside an IPC stub also gets the stub's return address,
+     * which the RBP chain skips.
      */
     if (!iskernelp(whichproc) &&
-        whichproc->p_seg.p_kern_trap_style == KTS_SYSCALL) {
-        unsigned char code[4];
-        int pops = 0;
+        (whichproc->p_seg.p_kern_trap_style == KTS_SYSCALL ||
+         whichproc->p_seg.p_kern_trap_style == KTS_INT_UM))
+        ret0 = stub_return_address(whichproc);
 
-        if (data_copy(whichproc->p_endpoint, whichproc->p_reg.pc, KERNEL,
-                      (vir_bytes)code, sizeof(code)) == OK) {
-            while (pops < (int)sizeof(code) - 1 &&
-                   code[pops] >= 0x58 && code[pops] <= 0x5f)
-                pops++;                         /* pop %r64 */
-            if (code[pops] != 0xc3 ||           /* ret */
-                data_copy(whichproc->p_endpoint,
-                          whichproc->p_reg.sp + pops * sizeof(reg_t),
-                          KERNEL, (vir_bytes)&ret0, sizeof(ret0)) != OK)
-                ret0 = 0;
-        }
-    }
-
-#if USE_SYSDEBUG
     proc_stacktrace_execute(whichproc, whichproc->p_reg.rbp,
                             whichproc->p_reg.pc, ret0);
 #endif
