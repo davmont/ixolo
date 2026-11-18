@@ -400,8 +400,26 @@ pthread__pcond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 	__atomic_fetch_add(&pc->pc_waiters, 1, __ATOMIC_SEQ_CST);
 	seq = __atomic_load_n(&pc->pc_seq, __ATOMIC_SEQ_CST);
 	pthread_mutex_unlock(mutex);
-	error = psync_wait(pc->pc_id, CHAN_READ, &pc->pc_seq, seq, abstime,
-	    pc->pc_clock);
+
+	/*
+	 * The wait is in the IPC server, where pthread_cancel()'s
+	 * _lwp_wakeup() does not reach: as a cancellation point, it sends
+	 * the cancellation signal instead, which cuts the wait short.  The
+	 * signal's handler acts at once, wherever it finds the thread, so
+	 * it must first undo the wait as below: pthread__pcond_cancel().
+	 */
+	self->pt_pcond = cond;
+	self->pt_pcondmtx = mutex;
+	self->pt_cancelpt++;
+	membar_sync();			/* see CANCELPOINT_ENTER() */
+	if (__predict_false(self->pt_cancel))
+		error = 0;
+	else
+		error = psync_wait(pc->pc_id, CHAN_READ, &pc->pc_seq, seq,
+		    abstime, pc->pc_clock);
+	self->pt_cancelpt--;
+	self->pt_pcondmtx = NULL;
+
 	__atomic_fetch_sub(&pc->pc_waiters, 1, __ATOMIC_SEQ_CST);
 	pthread_mutex_lock(mutex);
 
@@ -410,6 +428,24 @@ pthread__pcond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 	if (error == ETIMEDOUT || error == EINVAL)
 		return error;
 	return 0;
+}
+
+/*
+ * Called by the cancellation signal's handler before it acts: if the thread
+ * was waiting in pthread__pcond_timedwait(), leave the wait as that does, so
+ * that the clean-up handlers run with the mutex locked, as POSIX says.
+ */
+void
+pthread__pcond_cancel(pthread_t self)
+{
+	pthread_mutex_t *mutex = self->pt_pcondmtx;
+
+	if (mutex == NULL)
+		return;
+	self->pt_pcondmtx = NULL;
+	__atomic_fetch_sub(&PC(self->pt_pcond)->pc_waiters, 1,
+	    __ATOMIC_SEQ_CST);
+	pthread_mutex_lock(mutex);
 }
 
 int

@@ -199,6 +199,9 @@ pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 		return __libc_cond_timedwait_stub(cond, mutex, abstime);
 #endif
 
+#ifdef __minix
+	PTHREAD__LAZY_MAGIC(&cond->ptc_magic, _PT_COND_MAGIC);
+#endif
 	clkid = pthread_cond_getclock(cond);
 	pthread__error(EINVAL, "Invalid condition variable",
 	    cond->ptc_magic == _PT_COND_MAGIC);
@@ -326,6 +329,7 @@ pthread_cond_signal(pthread_cond_t *cond)
 	if (COND_IS_PSHARED(cond))
 		return pthread__pcond_signal(cond, 0);
 #endif
+	PTHREAD__LAZY_MAGIC(&cond->ptc_magic, _PT_COND_MAGIC);
 	pthread__error(EINVAL, "Invalid condition variable",
 	    cond->ptc_magic == _PT_COND_MAGIC);
 
@@ -375,6 +379,7 @@ pthread_cond_broadcast(pthread_cond_t *cond)
 	if (COND_IS_PSHARED(cond))
 		return pthread__pcond_signal(cond, 1);
 #endif
+	PTHREAD__LAZY_MAGIC(&cond->ptc_magic, _PT_COND_MAGIC);
 	pthread__error(EINVAL, "Invalid condition variable",
 	    cond->ptc_magic == _PT_COND_MAGIC);
 
