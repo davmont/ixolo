@@ -57,6 +57,9 @@ static size_t tls_initsize;
 static size_t tls_size;
 static size_t tls_align = sizeof(void *);
 static size_t tls_allocation;
+#ifdef __HAVE_TLS_VARIANT_II
+static size_t tls_offset;	/* of the initialization image, below the TCB */
+#endif
 static void *initial_thread_tcb;
 
 void * __libc_tls_get_addr(void);
@@ -85,17 +88,21 @@ _rtld_tls_allocate(void)
 	if (initial_thread_tcb == NULL) {
 #ifdef __HAVE_TLS_VARIANT_II
 		/*
-		 * Round the TLS block size up to the PT_TLS segment alignment,
-		 * not merely the pointer size.  For Variant II the thread
-		 * pointer sits at p + tls_size, and the static linker computed
-		 * each variable's @tpoff using roundup2(p_memsz, p_align).  If
-		 * we round to a smaller value here the thread pointer lands too
-		 * low and every %fs-relative TLS access is off by the alignment
-		 * gap, corrupting memory just below the block.  This bites any
-		 * static binary that has a thread-local needing >8-byte
-		 * alignment (e.g. BIND's libisc has a 16-byte-aligned one).
+		 * For Variant II the static linker gives each variable the
+		 * thread-pointer offset (its offset in the PT_TLS segment) -
+		 * roundup2(p_memsz, p_align), so that is where the
+		 * initialization image starts, below the TCB.  The block is
+		 * rounded further up to the pointer size, for the TCB above
+		 * it, but the image does not move with it: a 4-byte segment
+		 * sits at tcb - 4, not at the start of an 8-byte block.  Both
+		 * roundings must use p_align, not merely the pointer size, or
+		 * a thread-local needing more alignment (BIND's libisc has a
+		 * 16-byte-aligned one) is off by the alignment gap.
 		 */
-		tls_size = roundup2(tls_size,
+		if (tls_align == 0)
+			tls_align = 1;
+		tls_offset = roundup2(tls_size, tls_align);
+		tls_size = roundup2(tls_offset,
 		    tls_align < sizeof(void *) ? sizeof(void *) : tls_align);
 #endif
 		tls_allocation = tls_size + sizeof(*tcb);
@@ -118,6 +125,7 @@ _rtld_tls_allocate(void)
 	/* LINTED tls_size is rounded above */
 	tcb = (struct tls_tcb *)(p + tls_size);
 	tcb->tcb_self = tcb;
+	p = (uint8_t *)tcb - tls_offset;
 #endif
 	memcpy(p, tls_initaddr, tls_initsize);
 
