@@ -141,6 +141,7 @@ struct	__pthread_st {
 	 * pthread__pcond_timedwait(). */
 	pthread_cond_t * volatile pt_pcond;
 	pthread_mutex_t * volatile pt_pcondmtx;
+	volatile unsigned int pt_pcondseq;
 #endif
 
 	/* Thread-specific data.  Large so it sits close to the end. */

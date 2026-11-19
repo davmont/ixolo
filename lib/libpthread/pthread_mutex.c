@@ -217,6 +217,7 @@ pthread_mutex_destroy(pthread_mutex_t *ptm)
 #ifdef __minix
 	if (MUTEX_IS_PSHARED(ptm))
 		return pthread__pmutex_destroy(ptm);
+	PTHREAD__LAZY_MAGIC(&ptm->ptm_magic, _PT_MUTEX_MAGIC);
 #endif
 	pthread__error(EINVAL, "Invalid mutex",
 	    ptm->ptm_magic == _PT_MUTEX_MAGIC);
@@ -566,6 +567,7 @@ pthread_mutex_unlock(pthread_mutex_t *ptm)
 #ifdef __minix
 	if (MUTEX_IS_PSHARED(ptm))
 		return pthread__pmutex_unlock(ptm);
+	PTHREAD__LAZY_MAGIC(&ptm->ptm_magic, _PT_MUTEX_MAGIC);
 #endif
 	pthread__error(EINVAL, "Invalid mutex",
 	    ptm->ptm_magic == _PT_MUTEX_MAGIC);

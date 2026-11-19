@@ -387,13 +387,16 @@ pthread__pcond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 	struct pthread__pcond *pc = PC(cond);
 	pthread_t self = pthread__self();
 	unsigned int seq;
-	int error;
+	int error, others;
 
 	if (!(mutex->ptm_magic == _PT_MUTEX_PSHARED_MAGIC ?
 	    pthread__pmutex_held(mutex) : _pthread_mutex_held_np(mutex)))
 		return EPERM;
 	if (__predict_false(self->pt_cancel))
 		pthread__cancelled();
+	if (abstime != NULL && (abstime->tv_sec < 0 || abstime->tv_nsec < 0 ||
+	    abstime->tv_nsec >= 1000000000L))
+		return EINVAL;
 
 	/* Counted before the sequence is read: a signal that bumps it after
 	 * this either finds us counted, or comes before our wait looks. */
@@ -409,6 +412,7 @@ pthread__pcond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 	 * it must first undo the wait as below: pthread__pcond_cancel().
 	 */
 	self->pt_pcond = cond;
+	self->pt_pcondseq = seq;
 	self->pt_pcondmtx = mutex;
 	self->pt_cancelpt++;
 	membar_sync();			/* see CANCELPOINT_ENTER() */
@@ -420,11 +424,20 @@ pthread__pcond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 	self->pt_cancelpt--;
 	self->pt_pcondmtx = NULL;
 
-	__atomic_fetch_sub(&pc->pc_waiters, 1, __ATOMIC_SEQ_CST);
+	others = (__atomic_fetch_sub(&pc->pc_waiters, 1, __ATOMIC_SEQ_CST) > 1);
 	pthread_mutex_lock(mutex);
 
-	if (__predict_false(self->pt_cancel))
+	/*
+	 * If cancelled after absorbing a pthread_cond_signal() wakeup while
+	 * other threads remain blocked on cond, pass the wakeup on (POSIX).
+	 */
+	if (__predict_false(self->pt_cancel)) {
+		if (others && pc->pc_magic == _PT_COND_PSHARED_MAGIC &&
+		    __atomic_load_n(&pc->pc_waiters, __ATOMIC_SEQ_CST) != 0 &&
+		    __atomic_load_n(&pc->pc_seq, __ATOMIC_SEQ_CST) != seq)
+			psync_wake(pc->pc_id, CHAN_READ, 1);
 		pthread__cancelled();
+	}
 	if (error == ETIMEDOUT || error == EINVAL)
 		return error;
 	return 0;
@@ -439,12 +452,15 @@ void
 pthread__pcond_cancel(pthread_t self)
 {
 	pthread_mutex_t *mutex = self->pt_pcondmtx;
+	struct pthread__pcond *pc;
 
 	if (mutex == NULL)
 		return;
 	self->pt_pcondmtx = NULL;
-	__atomic_fetch_sub(&PC(self->pt_pcond)->pc_waiters, 1,
-	    __ATOMIC_SEQ_CST);
+	pc = PC(self->pt_pcond);
+	if (__atomic_fetch_sub(&pc->pc_waiters, 1, __ATOMIC_SEQ_CST) > 1 &&
+	    __atomic_load_n(&pc->pc_seq, __ATOMIC_SEQ_CST) != self->pt_pcondseq)
+		psync_wake(pc->pc_id, CHAN_READ, 1);
 	pthread_mutex_lock(mutex);
 }
 

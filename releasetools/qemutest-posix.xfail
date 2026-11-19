@@ -71,7 +71,6 @@ interfaces/pthread_cond_signal/4-2                       # timeout
 
 # interfaces/pthread_cond_timedwait
 interfaces/pthread_cond_timedwait/2-3                    # fail: unlocks a mutex held by an exited thread (undefined), EPERM as on NetBSD
-interfaces/pthread_cond_timedwait/4-2                    # fail
 interfaces/pthread_cond_timedwait/4-3                    # timeout
 
 # interfaces/pthread_cond_wait

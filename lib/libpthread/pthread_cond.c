@@ -137,6 +137,7 @@ pthread_cond_destroy(pthread_cond_t *cond)
 #ifdef __minix
 	if (COND_IS_PSHARED(cond))
 		return pthread__pcond_destroy(cond);
+	PTHREAD__LAZY_MAGIC(&cond->ptc_magic, _PT_COND_MAGIC);
 #endif
 	pthread__error(EINVAL, "Invalid condition variable",
 	    cond->ptc_magic == _PT_COND_MAGIC);
@@ -212,6 +213,7 @@ pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 		pthread__error(EPERM, "Mutex not locked in condition wait",
 		    pthread__pmutex_held(mutex));
 	} else {
+		PTHREAD__LAZY_MAGIC(&mutex->ptm_magic, _PT_MUTEX_MAGIC);
 #endif
 	pthread__error(EINVAL, "Invalid mutex",
 	    mutex->ptm_magic == _PT_MUTEX_MAGIC);
@@ -227,6 +229,11 @@ pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 	if (__predict_false(self->pt_cancel)) {
 		pthread__cancelled();
 	}
+#ifdef __minix
+	if (abstime != NULL && (abstime->tv_sec < 0 || abstime->tv_nsec < 0 ||
+	    abstime->tv_nsec >= 1000000000L))
+		return EINVAL;
+#endif
 
 	/* Note this thread as waiting on the CV. */
 	cond->ptc_mutex = mutex;
@@ -328,8 +335,8 @@ pthread_cond_signal(pthread_cond_t *cond)
 #ifdef __minix
 	if (COND_IS_PSHARED(cond))
 		return pthread__pcond_signal(cond, 0);
-#endif
 	PTHREAD__LAZY_MAGIC(&cond->ptc_magic, _PT_COND_MAGIC);
+#endif
 	pthread__error(EINVAL, "Invalid condition variable",
 	    cond->ptc_magic == _PT_COND_MAGIC);
 
@@ -378,8 +385,8 @@ pthread_cond_broadcast(pthread_cond_t *cond)
 #ifdef __minix
 	if (COND_IS_PSHARED(cond))
 		return pthread__pcond_signal(cond, 1);
-#endif
 	PTHREAD__LAZY_MAGIC(&cond->ptc_magic, _PT_COND_MAGIC);
+#endif
 	pthread__error(EINVAL, "Invalid condition variable",
 	    cond->ptc_magic == _PT_COND_MAGIC);
 
