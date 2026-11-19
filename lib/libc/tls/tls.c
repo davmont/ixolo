@@ -51,6 +51,9 @@ __RCSID("$NetBSD: tls.c,v 1.8 2014/12/14 23:49:17 chs Exp $");
 #include <unistd.h>
 
 __dso_hidden void	__libc_static_tls_setup(void);
+#ifdef __minix
+ssize_t	_sys_write(int, const void *, size_t);
+#endif
 
 static const void *tls_initaddr;
 static size_t tls_initsize;
@@ -84,6 +87,7 @@ _rtld_tls_allocate(void)
 {
 	struct tls_tcb *tcb;
 	uint8_t *p;
+	void *mem;
 
 	if (initial_thread_tcb == NULL) {
 #ifdef __HAVE_TLS_VARIANT_II
@@ -102,19 +106,34 @@ _rtld_tls_allocate(void)
 		if (tls_align == 0)
 			tls_align = 1;
 		tls_offset = roundup2(tls_size, tls_align);
-		tls_size = roundup2(tls_offset,
-		    tls_align < sizeof(void *) ? sizeof(void *) : tls_align);
+		if (tls_align < sizeof(void *))
+			tls_align = sizeof(void *);
+		tls_size = roundup2(tls_offset, tls_align);
 #endif
 		tls_allocation = tls_size + sizeof(*tcb);
 
-		initial_thread_tcb = p = mmap(NULL, tls_allocation,
+		p = mmap(NULL, tls_allocation,
 		    PROT_READ | PROT_WRITE, MAP_ANON, -1, 0);
+		if (p == MAP_FAILED)
+			p = NULL;
+		initial_thread_tcb = p;
+	} else if (tls_align > sizeof(void *)) {
+		if (posix_memalign(&mem, tls_align, tls_allocation) != 0)
+			p = NULL;
+		else {
+			p = mem;
+			memset(p, 0, tls_allocation);
+		}
 	} else {
 		p = calloc(1, tls_allocation);
 	}
 	if (p == NULL) {
 		static const char msg[] =  "TLS allocation failed, terminating\n";
+#ifdef __minix
+		_sys_write(STDERR_FILENO, msg, sizeof(msg) - 1);
+#else
 		write(STDERR_FILENO, msg, sizeof(msg));
+#endif
 		_exit(127);
 	}
 #ifdef __HAVE_TLS_VARIANT_I
@@ -127,7 +146,8 @@ _rtld_tls_allocate(void)
 	tcb->tcb_self = tcb;
 	p = (uint8_t *)tcb - tls_offset;
 #endif
-	memcpy(p, tls_initaddr, tls_initsize);
+	if (tls_initsize > 0)
+		memcpy(p, tls_initaddr, tls_initsize);
 
 	return tcb;
 }

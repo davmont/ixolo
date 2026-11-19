@@ -151,6 +151,12 @@ int	__sigsuspend14(const sigset_t *);
 
 #ifdef __minix
 /*
+ * A stub may be called during _libc_init() before TLS is set up (while
+ * __uselibcstub is still non-zero): do not read the thread pointer yet.
+ */
+#define	pthread__self()	(__predict_true(!__uselibcstub) ? pthread__self() : NULL)
+
+/*
  * pthread_cancel() of a thread blocked in one of these calls sends it the
  * cancellation signal, which cuts the call short; its handler acts on a
  * pending cancellation only while pt_cancelpt, how deep the thread is in

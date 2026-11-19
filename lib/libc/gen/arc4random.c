@@ -62,6 +62,11 @@ __RCSID("$NetBSD: arc4random.c,v 1.30 2015/05/13 23:15:57 justin Exp $");
 #include <sys/errno.h>
 #if defined(__minix)
 #include <sys/fcntl.h>
+#include <errno.h>
+
+int	_sys_open(const char *, int, ...);
+ssize_t	_sys_read(int, void *, size_t);
+int	_sys_close(int);
 #endif
 #include <sys/mman.h>
 #include <sys/sysctl.h>
@@ -427,13 +432,26 @@ arc4random_prng_addrandom(struct arc4random_prng *prng, const void *data,
 #if defined(__minix)
 	/* LSC: We do not have a compatibility layer for the 
 	 * KERN_ARND call, so do it the old way... */
-	int fd;
+	int fd, serrno = errno;
 
-	fd = open("/dev/urandom", O_RDONLY);
+	fd = _sys_open("/dev/urandom", O_RDONLY | O_CLOEXEC);
 	if (fd != -1) {
-		(void)read(fd, buf, buflen);
-		close(fd);
+		uint8_t *p = buf;
+		size_t left = buflen;
+		ssize_t r;
+
+		while (left > 0) {
+			r = _sys_read(fd, p, left);
+			if (r < 0 && errno == EINTR)
+				continue;
+			if (r <= 0)
+				break;
+			p += r;
+			left -= (size_t)r;
+		}
+		(void)_sys_close(fd);
 	}
+	errno = serrno;
 
         /* fd < 0 or failed sysctl ?  Ah, what the heck. We'll just take
          * whatever was on the stack... */
