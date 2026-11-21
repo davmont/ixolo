@@ -39,6 +39,8 @@
 #include "pthread.h"
 #include "pthread_int.h"
 
+int	_sys___nanosleep50(const struct timespec *, struct timespec *);
+
 __CTASSERT(sizeof(struct pthread__pmutex) <= sizeof(pthread_mutex_t));
 __CTASSERT(sizeof(struct pthread__pcond) <= sizeof(pthread_cond_t));
 __CTASSERT(sizeof(struct pthread__prwlock) <= sizeof(pthread_rwlock_t));
@@ -363,13 +365,29 @@ pthread__pcond_init(pthread_cond_t *cond, clockid_t clock)
 	return 0;
 }
 
+/*
+ * Threads woken by a signal or broadcast are no longer blocked on the
+ * condition variable, and POSIX lets it be destroyed then, at once; but until
+ * they run they still count themselves in pc_waiters, the last thing they
+ * touch.  Give them time to leave.  A thread still blocked keeps the count up,
+ * and then it is EBUSY, as before; so too if a waiter died in its wait.
+ */
+#define	PCOND_DESTROY_TRIES	2000	/* of 1 ms: 2 s */
+
 int
 pthread__pcond_destroy(pthread_cond_t *cond)
 {
 	struct pthread__pcond *pc = PC(cond);
+	struct timespec ms = { 0, 1000000 };
+	int i;
 
-	if (pc->pc_waiters != 0)
-		return EBUSY;
+	for (i = 0; __atomic_load_n(&pc->pc_waiters, __ATOMIC_SEQ_CST) != 0;
+	    i++) {
+		if (i == PCOND_DESTROY_TRIES)
+			return EBUSY;
+		/* Not nanosleep(): destroy is not a cancellation point. */
+		(void)_sys___nanosleep50(&ms, NULL);
+	}
 	pc->pc_magic = _PT_COND_DEAD;
 	psync_free(pc->pc_id);
 	return 0;
@@ -387,14 +405,14 @@ pthread__pcond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 	struct pthread__pcond *pc = PC(cond);
 	pthread_t self = pthread__self();
 	unsigned int seq;
-	int error, others;
+	int error, others, signalled, id;
 
 	if (!(mutex->ptm_magic == _PT_MUTEX_PSHARED_MAGIC ?
 	    pthread__pmutex_held(mutex) : _pthread_mutex_held_np(mutex)))
 		return EPERM;
 	if (__predict_false(self->pt_cancel))
 		pthread__cancelled();
-	if (abstime != NULL && (abstime->tv_sec < 0 || abstime->tv_nsec < 0 ||
+	if (abstime != NULL && (abstime->tv_nsec < 0 ||
 	    abstime->tv_nsec >= 1000000000L))
 		return EINVAL;
 
@@ -424,18 +442,25 @@ pthread__pcond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 	self->pt_cancelpt--;
 	self->pt_pcondmtx = NULL;
 
+	/*
+	 * Leaving pc_waiters is the last touch of the condition variable: it
+	 * may be destroyed, and its memory used again, as soon as that is
+	 * done (see pthread__pcond_destroy()).  What the forwarding below
+	 * needs is read first.
+	 */
+	id = pc->pc_id;
+	signalled = (__atomic_load_n(&pc->pc_seq, __ATOMIC_SEQ_CST) != seq);
 	others = (__atomic_fetch_sub(&pc->pc_waiters, 1, __ATOMIC_SEQ_CST) > 1);
 	pthread_mutex_lock(mutex);
 
 	/*
 	 * If cancelled after absorbing a pthread_cond_signal() wakeup while
-	 * other threads remain blocked on cond, pass the wakeup on (POSIX).
+	 * other threads remain blocked on cond, pass the wakeup on (POSIX);
+	 * one too many is a spurious wakeup, which POSIX allows.
 	 */
 	if (__predict_false(self->pt_cancel)) {
-		if (others && pc->pc_magic == _PT_COND_PSHARED_MAGIC &&
-		    __atomic_load_n(&pc->pc_waiters, __ATOMIC_SEQ_CST) != 0 &&
-		    __atomic_load_n(&pc->pc_seq, __ATOMIC_SEQ_CST) != seq)
-			psync_wake(pc->pc_id, CHAN_READ, 1);
+		if (others && signalled)
+			psync_wake(id, CHAN_READ, 1);
 		pthread__cancelled();
 	}
 	if (error == ETIMEDOUT || error == EINVAL)
@@ -453,14 +478,19 @@ pthread__pcond_cancel(pthread_t self)
 {
 	pthread_mutex_t *mutex = self->pt_pcondmtx;
 	struct pthread__pcond *pc;
+	int id, signalled;
 
 	if (mutex == NULL)
 		return;
 	self->pt_pcondmtx = NULL;
 	pc = PC(self->pt_pcond);
+	/* As in pthread__pcond_timedwait(): pc is not touched once left. */
+	id = pc->pc_id;
+	signalled = (__atomic_load_n(&pc->pc_seq, __ATOMIC_SEQ_CST) !=
+	    self->pt_pcondseq);
 	if (__atomic_fetch_sub(&pc->pc_waiters, 1, __ATOMIC_SEQ_CST) > 1 &&
-	    __atomic_load_n(&pc->pc_seq, __ATOMIC_SEQ_CST) != self->pt_pcondseq)
-		psync_wake(pc->pc_id, CHAN_READ, 1);
+	    signalled)
+		psync_wake(id, CHAN_READ, 1);
 	pthread_mutex_lock(mutex);
 }
 

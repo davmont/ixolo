@@ -230,7 +230,7 @@ pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 		pthread__cancelled();
 	}
 #ifdef __minix
-	if (abstime != NULL && (abstime->tv_sec < 0 || abstime->tv_nsec < 0 ||
+	if (abstime != NULL && (abstime->tv_nsec < 0 ||
 	    abstime->tv_nsec >= 1000000000L))
 		return EINVAL;
 #endif

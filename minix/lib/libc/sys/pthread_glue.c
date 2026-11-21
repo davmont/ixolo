@@ -108,11 +108,12 @@ _sys_clock_nanosleep(clockid_t clock_id, int flags, const struct timespec *rqtp,
 		errno = saved;
 		return r;
 	}
-	if (rqtp->tv_sec < 0 || rqtp->tv_nsec < 0 ||
-	    rqtp->tv_nsec >= 1000000000L)
+	if (rqtp->tv_nsec < 0 || rqtp->tv_nsec >= 1000000000L)
 		return EINVAL;
 
 	if (!(flags & TIMER_ABSTIME)) {
+		if (rqtp->tv_sec < 0)
+			return EINVAL;
 		r = (_sys___nanosleep50(rqtp, rmtp) == -1) ? errno : 0;
 		errno = saved;
 		return r;

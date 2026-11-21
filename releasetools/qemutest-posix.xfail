@@ -63,8 +63,6 @@ interfaces/pthread_atfork/3-3                            # timeout
 # interfaces/pthread_cond_broadcast
 interfaces/pthread_cond_broadcast/4-2                    # timeout
 
-# interfaces/pthread_cond_destroy
-interfaces/pthread_cond_destroy/2-1                      # nobuild
 
 # interfaces/pthread_cond_signal
 interfaces/pthread_cond_signal/4-2                       # timeout

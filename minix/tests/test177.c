@@ -202,6 +202,10 @@ cancel_wait(int pshared)
 	bad_ts.tv_sec = 0;
 	bad_ts.tv_nsec = -1;
 	if (pthread_cond_timedwait(&cc, &cm, &bad_ts) != EINVAL) e(67);
+	/* Before the epoch: not invalid, gone by; the mutex locked again. */
+	bad_ts.tv_sec = -1;
+	bad_ts.tv_nsec = 0;
+	if (pthread_cond_timedwait(&cc, &cm, &bad_ts) != ETIMEDOUT) e(82);
 	if (pthread_mutex_unlock(&cm) != 0) e(68);
 
 	waiting = cleaned = cond_flag = 0;

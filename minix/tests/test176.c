@@ -4,7 +4,8 @@
  * absolute pthread_cond_timedwait(3) on CLOCK_REALTIME wait for that time on
  * the clock as it is set meanwhile: sooner if it is set ahead, later if it is
  * set back.  Waits on CLOCK_MONOTONIC and relative ones do not move.  Also
- * the EINVAL and ENOTSUP cases of clock_nanosleep() and clock_settime(), and
+ * the EINVAL and ENOTSUP cases of clock_nanosleep() and clock_settime() (an
+ * absolute time before the epoch is not one: it has passed), and
  * an absolute clock_nanosleep() ending with EINTR, as sem_wait(3),
  * sem_timedwait(3) and mq_timedreceive(3) do, also with a time as far off as
  * time_t goes.  The test is setuid root,
@@ -89,6 +90,24 @@ test176a(void)
 	ts.tv_nsec = 0;
 	if (clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &ts, NULL) != 0)
 		e(6);
+
+	/* Before the epoch: in the past too, not invalid (only the
+	 * nanoseconds are); a negative relative time is. */
+	{
+		sem_t sem;
+
+		ts.tv_sec = -1;
+		ts.tv_nsec = 0;
+		if (clock_nanosleep(CLOCK_REALTIME, TIMER_ABSTIME, &ts,
+		    NULL) != 0) e(10);
+		if (clock_nanosleep(CLOCK_MONOTONIC, 0, &ts, NULL) != EINVAL)
+			e(11);
+		if (sem_init(&sem, 0, 0) != 0) e(12);
+		errno = 0;
+		if (sem_timedwait(&sem, &ts) != -1 || errno != ETIMEDOUT)
+			e(13);
+		if (sem_destroy(&sem) != 0) e(14);
+	}
 
 	ts = ts_of(now(CLOCK_REALTIME));
 	ts.tv_nsec = NSEC;
