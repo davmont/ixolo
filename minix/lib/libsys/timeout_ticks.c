@@ -192,8 +192,12 @@ abs_deadline_ns(int realtime, int64_t sec, long nsec, u64_t *due)
 {
 	int64_t ns;
 
-	if (sec < 0 || nsec < 0 || nsec >= (long) NSEC)
+	/* Only the nanoseconds can make it invalid (POSIX); a time before
+	 * the epoch is merely in the past. */
+	if (nsec < 0 || nsec >= (long) NSEC)
 		return EINVAL;
+	if (sec < 0)
+		return ETIMEDOUT;
 	if (sec > FAR_SEC)
 		sec = FAR_SEC;
 	ns = sec * (int64_t) NSEC + nsec;

@@ -125,11 +125,21 @@ test177b(void)
 		if (pthread_mutex_destroy(&m) != 0) e(27);
 		if (pthread_mutex_lock(&m) != EINVAL) e(28);
 	}
+
+	/* Untouched zero-filled objects can be destroyed directly, and
+	 * unlocking an untouched zero-filled mutex fails with EPERM. */
+	if ((z = calloc(1, sizeof(*z))) == NULL) e(29);
+	if (pthread_mutex_unlock(&z->m) != EPERM) e(60);
+	if (pthread_cond_destroy(&z->c) != 0) e(61);
+	if (pthread_cond_destroy(&z->c) != EINVAL) e(62);
+	if (pthread_mutex_destroy(&z->m) != 0) e(63);
+	if (pthread_mutex_destroy(&z->m) != EINVAL) e(64);
+	free(z);
 }
 
 static pthread_mutex_t cm;
 static pthread_cond_t cc;
-static volatile int waiting, cleaned;
+static volatile int waiting, cleaned, cond_flag;
 
 static void
 cancel_cleanup(void *arg)
@@ -148,10 +158,11 @@ waiter(void *arg)
 
 	if (pthread_mutex_lock(&cm) != 0) e(31);
 	pthread_cleanup_push(cancel_cleanup, NULL);
-	waiting = 1;
-	for (;;)
-		(void)pthread_cond_wait(&cc, &cm);	/* never signalled */
+	waiting++;
+	while (!cond_flag)
+		(void)pthread_cond_wait(&cc, &cm);
 	pthread_cleanup_pop(0);
+	if (pthread_mutex_unlock(&cm) != 0) e(65);
 	return NULL;
 }
 
@@ -170,7 +181,8 @@ cancel_wait(int pshared)
 {
 	pthread_mutexattr_t ma;
 	pthread_condattr_t ca;
-	pthread_t t;
+	pthread_t t, t2;
+	struct timespec bad_ts;
 	void *rv;
 
 	if (pthread_mutexattr_init(&ma) != 0) e(33);
@@ -184,9 +196,21 @@ cancel_wait(int pshared)
 	if (pthread_mutex_init(&cm, &ma) != 0) e(37);
 	if (pthread_cond_init(&cc, &ca) != 0) e(38);
 
-	waiting = cleaned = 0;
+	/* Invalid abstime in pthread_cond_timedwait(): EINVAL without
+	 * releasing the mutex. */
+	if (pthread_mutex_lock(&cm) != 0) e(66);
+	bad_ts.tv_sec = 0;
+	bad_ts.tv_nsec = -1;
+	if (pthread_cond_timedwait(&cc, &cm, &bad_ts) != EINVAL) e(67);
+	/* Before the epoch: not invalid, gone by; the mutex locked again. */
+	bad_ts.tv_sec = -1;
+	bad_ts.tv_nsec = 0;
+	if (pthread_cond_timedwait(&cc, &cm, &bad_ts) != ETIMEDOUT) e(82);
+	if (pthread_mutex_unlock(&cm) != 0) e(68);
+
+	waiting = cleaned = cond_flag = 0;
 	if (pthread_create(&t, NULL, waiter, NULL) != 0) e(39);
-	while (!waiting)
+	while (waiting < 1)
 		usleep(1000);
 	/* It has the mutex until it waits. */
 	if (pthread_mutex_lock(&cm) != 0) e(40);
@@ -200,6 +224,44 @@ cancel_wait(int pshared)
 	alarm(0);
 	if (rv != PTHREAD_CANCELED) e(44);
 	if (!cleaned) e(45);
+
+	/* Cancelling one of two waiters concurrently with pthread_cond_signal()
+	 * must not consume the signal meant for the surviving waiter. */
+	{
+		pthread_t victim, survivor;
+
+		waiting = cleaned = cond_flag = 0;
+		if (pthread_create(&t, NULL, waiter, NULL) != 0) e(69);
+		while (waiting < 1)
+			usleep(1000);
+		if (pthread_mutex_lock(&cm) != 0) e(70);
+		if (pthread_mutex_unlock(&cm) != 0) e(71);
+		usleep(10000);
+
+		if (pthread_create(&t2, NULL, waiter, NULL) != 0) e(72);
+		while (waiting < 2)
+			usleep(1000);
+		if (pthread_mutex_lock(&cm) != 0) e(73);
+		usleep(20000);
+
+		cond_flag = 1;
+		if (pthread_cond_signal(&cc) != 0) e(74);
+		usleep(20000);
+		/* Cancel the waiter that pthread_cond_signal() woke (FIFO for
+		 * pshared, LIFO for private) while it is blocked re-locking cm,
+		 * so it must forward the signal to the surviving waiter. */
+		victim = pshared ? t : t2;
+		survivor = pshared ? t2 : t;
+		if (pthread_cancel(victim) != 0) e(75);
+		if (pthread_mutex_unlock(&cm) != 0) e(76);
+		alarm(10);
+		if (pthread_join(victim, &rv) != 0) e(77);
+		if (rv != PTHREAD_CANCELED) e(78);
+		if (pthread_join(survivor, &rv) != 0) e(79);
+		if (rv != NULL) e(80);
+		alarm(0);
+		if (!cleaned) e(81);
+	}
 
 	if (pthread_cond_destroy(&cc) != 0) e(46);
 	if (pthread_mutex_destroy(&cm) != 0) e(47);
