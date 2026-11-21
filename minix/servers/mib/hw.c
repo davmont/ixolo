@@ -79,7 +79,7 @@ mib_hw_usermem(struct mib_call * call __unused, struct mib_node * node,
 }
 
 /*
- * Implementation of CTL_HW HW_NCPUONLINE.
+ * Implementation of CTL_HW HW_NCPU and HW_NCPUONLINE.
  */
 static ssize_t
 mib_hw_ncpuonline(struct mib_call * call __unused,
@@ -102,8 +102,14 @@ static struct mib_node mib_hw_table[] = {
 /* 1*/	[HW_MACHINE]		= MIB_STRING(_P | _RO, mach, "machine",
 				    "Machine class"),
 /* 2*/	/* HW_MODEL: not yet supported */
-/* 3*/	[HW_NCPU]		= MIB_INT(_P | _RO, CONFIG_MAX_CPUS,
-				    "ncpu", "Number of CPUs configured"),
+/*
+ * Not CONFIG_MAX_CPUS, the most the kernel supports: programs size their
+ * thread pools with this (sysconf(_SC_NPROCESSORS_CONF)), and jemalloc its
+ * arenas.  Without CPU hot-plugging, the CPUs configured are those online.
+ */
+/* 3*/	[HW_NCPU]		= MIB_FUNC(_P | _RO | CTLTYPE_INT, sizeof(int),
+				    mib_hw_ncpuonline, "ncpu",
+				    "Number of CPUs configured"),
 /* 4*/	[HW_BYTEORDER]		= MIB_INT(_P | _RO, BYTE_ORDER, "byteorder",
 				    "System byte order"),
 /* 5*/	[HW_PHYSMEM]		= MIB_FUNC(_P | _RO | CTLFLAG_UNSIGNED |
