@@ -135,6 +135,7 @@ static ssize_t
 mib_kern_cp_time(struct mib_call * call, struct mib_node * node __unused,
 	struct mib_oldp * oldp, struct mib_newp * newp __unused)
 {
+	struct machine machine;
 	uint64_t ticks[MINIX_CPUSTATES], sum[MINIX_CPUSTATES];
 	unsigned int cpu;
 	int i, r, do_sum;
@@ -161,12 +162,15 @@ mib_kern_cp_time(struct mib_call * call, struct mib_node * node __unused,
 	if (oldp == NULL)
 		return sizeof(ticks); /* implying a summation request */
 
+	if (sys_getmachine(&machine) != OK)
+		return EINVAL;
+
 	do_sum = (mib_getoldlen(oldp) == sizeof(ticks));
 
 	if (do_sum)
 		memset(&sum, 0, sizeof(sum));
 
-	for (cpu = 0; cpu < CONFIG_MAX_CPUS; cpu++) {
+	for (cpu = 0; cpu < machine.processors_count; cpu++) {
 		if ((r = sys_getcputicks(ticks, cpu)) != OK)
 			return r;
 

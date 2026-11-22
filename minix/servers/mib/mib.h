@@ -10,10 +10,6 @@
 #include "kernel/arch/i386/include/archconst.h"
 #endif
 
-#ifndef CONFIG_MAX_CPUS
-#define CONFIG_MAX_CPUS 1
-#endif
-
 /*
  * The following setting toggles the existence of the minix.test subtree.  For
  * production environments, it should probably be disabled, although it should
