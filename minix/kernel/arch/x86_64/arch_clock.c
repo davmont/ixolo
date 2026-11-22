@@ -637,13 +637,8 @@ get_cpu_ticks(unsigned int cpu, uint64_t ticks[CPUSTATES])
 
 	/*
 	 * tsc_per_tick[cpu] is populated when init_local_timer() runs on
-	 * that CPU.  For a CPU number that exists in the config (cpu <
-	 * CONFIG_MAX_CPUS — the only check the do_getinfo handler makes)
-	 * but is past ncpus or was never timer-initialised, the value is
-	 * still zero.  top(1) hits exactly this case by iterating over
-	 * CONFIG_MAX_CPUS in its sysctl(kern.cp_times) call — and the
-	 * unguarded divide previously panicked the kernel.  Return zeros
-	 * for uninitialised CPUs instead.
+	 * that CPU.  Guard against dividing by zero if a CPU's local timer
+	 * was never initialised (for example, an AP that failed to boot).
 	 */
 	if (tsc_per_tick[cpu] == 0) {
 		for (i = 0; i < CPUSTATES; i++)
