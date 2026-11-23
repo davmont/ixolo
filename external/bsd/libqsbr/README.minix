@@ -1,0 +1,11 @@
+libqsbr: EBR, QSBR and a G/C built on EBR, used by NPF to reclaim memory.
+
+Upstream:	https://github.com/rmind/libqsbr
+Imported:	commit e73407c (2019-12-15); dist/ is upstream's src/.
+License:	BSD-2-Clause (dist/LICENSE).
+
+Local changes: none.
+
+Built and run by minix/tests/npfdeps (t_gc, qsbr_stress).
+
+To update: copy upstream src/ over dist/.

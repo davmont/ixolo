@@ -1,0 +1,15 @@
+libnv: name/value lists (nvlist), NPF's configuration and ioctl format.
+
+Source:		NetBSD-10 sys/external/bsd/libnv/dist (last changed there in
+		cafa3bdb039, 2024-09-05), itself FreeBSD's libnv.
+License:	BSD-2-Clause (file headers).
+
+Local changes (MINIX):
+- dist/nv.h: the nvlist_ref_t/nvlist_t definitions taken for NetBSD are
+  taken for MINIX too (`#if defined(__NetBSD__) || defined(__minix)`).
+
+Tests: minix/tests/npfdeps/nvlist_*_test.c are the unmodified unit tests
+of https://github.com/rmind/nvlist (commit 551f171, 2019-04-15), built
+against these sources (as NetBSD's external/bsd/libnv/lib/srcs.mk).
+
+To update: copy NetBSD's dist/ over dist/, then re-apply the change above.

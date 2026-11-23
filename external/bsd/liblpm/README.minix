@@ -1,0 +1,12 @@
+liblpm: longest prefix match for IPv4/IPv6, used by NPF tables.
+
+Upstream:	https://github.com/rmind/liblpm
+Imported:	commit dc9a021 (2022-09-06); dist/ is upstream's src/ (the jni/
+		and lua/ bindings come with it and are not built).
+License:	BSD-2-Clause (dist/LICENSE).
+
+Local changes: none.
+
+Built and run by minix/tests/npfdeps (t_lpm).
+
+To update: copy upstream src/ over dist/.
