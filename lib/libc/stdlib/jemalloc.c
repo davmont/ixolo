@@ -968,10 +968,45 @@ static bool	malloc_init_hard(void);
 #define	malloc_mutex_lock(m)	mutex_lock(m)
 #define	malloc_mutex_unlock(m)	mutex_unlock(m)
 #elif defined(__minix)
-/* Real spinlocks (see the __cpu_simple_lock note where mutex_t is defined);
- * they only contend when the process is actually multi-threaded. */
+/*
+ * Real spinlocks (see the __cpu_simple_lock note where mutex_t is defined);
+ * they only contend when the process is actually multi-threaded.
+ *
+ * A waiter must not spin for ever: the holder may be waiting for the very CPU
+ * the waiter spins on (more threads than CPUs, or the holder preempted or
+ * blocked in a system call such as mmap(2) while holding the lock).  A pure
+ * spin then burns the waiter's whole quantum before the holder runs again
+ * (~200 ms per stall).  Spin for a while, which is enough when the holder is
+ * running on another CPU, then yield: sched_yield() drops the caller a
+ * priority queue, so the holder gets the CPU.  The raw system call is used
+ * because it is not a cancellation point and libpthread does not replace it.
+ */
+int	_sys_sched_yield(void);
+
+#define	MALLOC_SPIN_TRIES	1000
+
+static void
+malloc_spin_lock(__cpu_simple_lock_t *m)
+{
+	unsigned i;
+
+	for (;;) {
+		for (i = 0; i < MALLOC_SPIN_TRIES; i++) {
+			if (!__SIMPLELOCK_LOCKED_P(m) &&
+			    __cpu_simple_lock_try(m))
+				return;
+#if defined(__i386__) || defined(__x86_64__)
+			__asm volatile("pause" ::: "memory");
+#else
+			__insn_barrier();
+#endif
+		}
+		(void)_sys_sched_yield();
+	}
+}
+
 #define	malloc_mutex_init(m)	__cpu_simple_lock_init(m)
-#define	malloc_mutex_lock(m)	do { if (__isthreaded) __cpu_simple_lock(m); } while (/*CONSTCOND*/0)
+#define	malloc_mutex_lock(m)	do { if (__isthreaded) malloc_spin_lock(m); } while (/*CONSTCOND*/0)
 #define	malloc_mutex_unlock(m)	do { if (__isthreaded) __cpu_simple_unlock(m); } while (/*CONSTCOND*/0)
 #else	/* __NetBSD__ */
 static inline void
