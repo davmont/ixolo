@@ -1,0 +1,16 @@
+thmap: concurrent trie-hash map, used by NPF (connection and table maps).
+
+Upstream:	https://github.com/rmind/thmap
+Imported:	commit b8ade06 (2023-10-30); dist/ is upstream's src/.
+License:	BSD-2-Clause (dist/LICENSE).
+
+Local changes (MINIX):
+- dist/utils.h: SPINLOCK_BACKOFF() calls sched_yield() once the back-off
+  is at its maximum, in programs (not in system services).  On MINIX a
+  node-lock holder can be waiting for the CPU its waiter spins on, and a
+  pure spin then burns a whole quantum: thmap_stress on two CPUs took
+  ~20 minutes instead of ~10 seconds.
+
+Built and run by minix/tests/npfdeps (t_thmap, thmap_stress).
+
+To update: copy upstream src/ over dist/, then re-apply the change above.

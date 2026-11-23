@@ -128,6 +128,20 @@ again:
 #else
 #define SPINLOCK_BACKOFF_HOOK
 #endif
+#if defined(__minix) && !defined(_MINIX_SYSTEM)
+/*
+ * MINIX-local: once the back-off is at its maximum, yield.  The lock holder
+ * may be waiting for the CPU this thread spins on (more threads than CPUs, or
+ * preempted while holding a node lock); a pure spin then burns a whole quantum
+ * before the holder runs again.  sched_yield() drops the caller a priority
+ * queue, so the holder gets the CPU.  Not in system services (the lwip
+ * service runs thmap single-threaded, so a node lock is never contended).
+ */
+#include <sched.h>
+#define	SPINLOCK_BACKOFF_YIELD()	(void)sched_yield()
+#else
+#define	SPINLOCK_BACKOFF_YIELD()	do { } while (/* CONSTCOND */ 0)
+#endif
 #define	SPINLOCK_BACKOFF(count)					\
 do {								\
 	int __i;						\
@@ -136,6 +150,8 @@ do {								\
 	}							\
 	if ((count) < SPINLOCK_BACKOFF_MAX)			\
 		(count) += (count);				\
+	else							\
+		SPINLOCK_BACKOFF_YIELD();			\
 } while (/* CONSTCOND */ 0);
 
 /*
