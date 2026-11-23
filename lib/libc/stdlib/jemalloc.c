@@ -989,6 +989,7 @@ static void
 malloc_spin_lock(__cpu_simple_lock_t *m)
 {
 	unsigned i;
+	int serrno;
 
 	for (;;) {
 		for (i = 0; i < MALLOC_SPIN_TRIES; i++) {
@@ -1001,7 +1002,11 @@ malloc_spin_lock(__cpu_simple_lock_t *m)
 			__insn_barrier();
 #endif
 		}
+		/* A successful malloc() leaves errno alone, even if the
+		 * yield fails. */
+		serrno = errno;
 		(void)_sys_sched_yield();
+		errno = serrno;
 	}
 }
 

@@ -12,7 +12,7 @@
  *
  * The stall happens while the heap of a process is still growing, so each
  * round is a new process (this program again, with the argument "child"): it
- * starts ncpu + 1 threads, more than the user CPUs on any machine, that each
+ * starts 2 * ncpu + 1 threads, at least two for each user CPU, that each
  * malloc and free a few blocks, and exits with SLOW if that took more than
  * SLOW_MS.  Only the threads are timed, not fork(2) and exec(2).  Before the
  * fix every round on two CPUs was slow; now none should be, and the test
@@ -63,7 +63,7 @@ child(void)
 	void *ret;
 
 	ncpu = sysconf(_SC_NPROCESSORS_ONLN);
-	n = (ncpu < 1) ? 2 : ncpu + 1;
+	n = (ncpu < 1) ? 2 : 2 * ncpu + 1;
 	if (n > MAX_THREADS)
 		n = MAX_THREADS;
 
@@ -89,13 +89,15 @@ main(int argc, char **argv)
 	int r, status, slow;
 	pid_t pid;
 
+	/* _exit(): on an error, threads may still be running. */
 	if (argc == 2 && strcmp(argv[1], "child") == 0)
-		return child();
+		_exit(child());
 
 	/* start() changes directory; exec ourselves by an absolute path. */
-	if (argv[0][0] == '/')
-		strlcpy(path, argv[0], sizeof(path));
-	else if (getcwd(path, sizeof(path)) == NULL ||
+	if (argv[0][0] == '/') {
+		if (strlcpy(path, argv[0], sizeof(path)) >= sizeof(path))
+			path[0] = '\0';
+	} else if (getcwd(path, sizeof(path)) == NULL ||
 	    strlcat(path, "/", sizeof(path)) >= sizeof(path) ||
 	    strlcat(path, argv[0], sizeof(path)) >= sizeof(path))
 		path[0] = '\0';
