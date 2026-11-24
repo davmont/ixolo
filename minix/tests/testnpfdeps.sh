@@ -12,11 +12,16 @@ cd npfdeps || exit 1
 
 for t in nvlist_add_test nvlist_append_test nvlist_exists_test nvlist_free_test \
     nvlist_get_test nvlist_move_test; do
-	# TAP output: fail on any "not ok".
+	# TAP output: fail on any "not ok", and unless every test in the
+	# "1..N" plan reported "ok" (one that stops early exits 0 too).
 	out=`./$t 2>&1` || { echo "$t failed:"; echo "$out"; exit 1; }
 	if echo "$out" | grep -q '^not ok'; then
 		echo "$t:"; echo "$out" | grep '^not ok'; exit 1
 	fi
+	plan=`echo "$out" | sed -n 's/^1\.\.\([0-9][0-9]*\)$/\1/p'`
+	nok=`echo "$out" | grep -c '^ok '`
+	[ -n "$plan" ] && [ "$nok" -eq "$plan" ] || \
+	    { echo "$t: $nok of ${plan:-?} tests ok"; exit 1; }
 done
 
 # Each prints "ok" at the end, and aborts on a failed assertion.
