@@ -84,6 +84,18 @@
 ./usr/tests/minix-posix/ddekit/ddekittest_driver        minix-tests
 ./usr/tests/minix-posix/ddekit/system.conf              minix-tests
 ./usr/tests/minix-posix/mod                             minix-tests     pic
+./usr/tests/minix-posix/npfdeps                         minix-tests
+./usr/tests/minix-posix/npfdeps/nvlist_add_test         minix-tests
+./usr/tests/minix-posix/npfdeps/nvlist_append_test      minix-tests
+./usr/tests/minix-posix/npfdeps/nvlist_exists_test      minix-tests
+./usr/tests/minix-posix/npfdeps/nvlist_free_test        minix-tests
+./usr/tests/minix-posix/npfdeps/nvlist_get_test         minix-tests
+./usr/tests/minix-posix/npfdeps/nvlist_move_test        minix-tests
+./usr/tests/minix-posix/npfdeps/qsbr_stress             minix-tests
+./usr/tests/minix-posix/npfdeps/t_gc                    minix-tests
+./usr/tests/minix-posix/npfdeps/t_lpm                   minix-tests
+./usr/tests/minix-posix/npfdeps/t_thmap                 minix-tests
+./usr/tests/minix-posix/npfdeps/thmap_stress            minix-tests
 ./usr/tests/minix-posix/rmibtest                        minix-tests
 ./usr/tests/minix-posix/rmibtest/rmibtest               minix-tests
 ./usr/tests/minix-posix/rmibtest/rmibtest.conf          minix-tests
@@ -289,6 +301,7 @@
 ./usr/tests/minix-posix/testisofs                       minix-tests
 ./usr/tests/minix-posix/testkyua                        minix-tests
 ./usr/tests/minix-posix/testmfs                         minix-tests
+./usr/tests/minix-posix/testnpfdeps                     minix-tests
 ./usr/tests/minix-posix/testrelpol                      minix-tests
 ./usr/tests/minix-posix/testrmib                        minix-tests
 ./usr/tests/minix-posix/testsh1                         minix-tests

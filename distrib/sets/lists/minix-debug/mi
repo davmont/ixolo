@@ -962,6 +962,18 @@
 ./usr/libdata/debug/usr/tests/minix-posix/ddekit        minix-debug
 ./usr/libdata/debug/usr/tests/minix-posix/ddekit/ddekittest_driver.debug minix-debug     debug
 ./usr/libdata/debug/usr/tests/minix-posix/mod.debug     minix-debug     debug
+./usr/libdata/debug/usr/tests/minix-posix/npfdeps       minix-debug
+./usr/libdata/debug/usr/tests/minix-posix/npfdeps/nvlist_add_test.debug minix-debug     debug
+./usr/libdata/debug/usr/tests/minix-posix/npfdeps/nvlist_append_test.debug minix-debug     debug
+./usr/libdata/debug/usr/tests/minix-posix/npfdeps/nvlist_exists_test.debug minix-debug     debug
+./usr/libdata/debug/usr/tests/minix-posix/npfdeps/nvlist_free_test.debug minix-debug     debug
+./usr/libdata/debug/usr/tests/minix-posix/npfdeps/nvlist_get_test.debug minix-debug     debug
+./usr/libdata/debug/usr/tests/minix-posix/npfdeps/nvlist_move_test.debug minix-debug     debug
+./usr/libdata/debug/usr/tests/minix-posix/npfdeps/qsbr_stress.debug minix-debug     debug
+./usr/libdata/debug/usr/tests/minix-posix/npfdeps/t_gc.debug minix-debug     debug
+./usr/libdata/debug/usr/tests/minix-posix/npfdeps/t_lpm.debug minix-debug     debug
+./usr/libdata/debug/usr/tests/minix-posix/npfdeps/t_thmap.debug minix-debug     debug
+./usr/libdata/debug/usr/tests/minix-posix/npfdeps/thmap_stress.debug minix-debug     debug
 ./usr/libdata/debug/usr/tests/minix-posix/rmibtest      minix-debug
 ./usr/libdata/debug/usr/tests/minix-posix/rmibtest/rmibtest.debug minix-debug     debug
 ./usr/libdata/debug/usr/tests/minix-posix/t10a.debug    minix-debug     debug
