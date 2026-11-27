@@ -799,6 +799,9 @@ ifdev_add(struct ifdev * ifdev, const char * name, unsigned int ifflags,
 
 	ifdev_table[ifindex] = ifdev;
 
+	/* Let the packet filter know about the interface. */
+	pfil_ifattach(ifdev);
+
 	/*
 	 * Set the initial interface flags.  Use the regular procedure for this
 	 * just in case the interface module is crazy enough to set the
@@ -875,6 +878,8 @@ ifdev_remove(struct ifdev * ifdev)
 	 */
 	TAILQ_FOREACH(bpfl, &ifdev->ifdev_bpf, bpfl_next)
 		bpfdev_detach(bpfl);
+
+	pfil_ifdetach(ifdev);
 
 	/* Then perform the actual interface removal. */
 	netif_remove(&ifdev->ifdev_netif);

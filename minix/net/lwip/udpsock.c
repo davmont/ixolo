@@ -154,12 +154,12 @@ udpsock_port_unreach(const ip_addr_t * local, uint16_t lport,
 }
 
 /*
- * lwIP hook for every incoming IPv4 packet, before lwIP processes it: look for
- * ICMP port-unreachable messages about our UDP datagrams.  The packet itself
- * is left for lwIP to process as usual.
+ * Called for every incoming IPv4 packet, before lwIP processes it (from the
+ * lwIP input hook, see pfil.c): look for ICMP port-unreachable messages about
+ * our UDP datagrams.  The packet itself is left for lwIP to process as usual.
  */
-int
-lwip_hook_ip4_input(struct pbuf * p, struct netif * inp __unused)
+void
+udpsock_ip4_input(struct pbuf * p)
 {
 	uint8_t buf[60 + 8 + 60 + 8];	/* IP, ICMP, inner IP, UDP headers */
 	ip_addr_t local, remote;
@@ -167,26 +167,26 @@ lwip_hook_ip4_input(struct pbuf * p, struct netif * inp __unused)
 
 	/* This is called for every packet: rule out most at a glance. */
 	if (p->len < 20 || ((uint8_t *)p->payload)[9] != IP_PROTO_ICMP)
-		return 0;
+		return;
 
 	len = pbuf_copy_partial(p, buf, sizeof(buf), 0);
 
 	if (len < 20 || (buf[0] >> 4) != 4)
-		return 0;
+		return;
 	hlen = (buf[0] & 0x0f) * 4;
 	if ((buf[6] & 0x1f) != 0 || buf[7] != 0)	/* not a first fragment */
-		return 0;
+		return;
 	if (len < hlen + 8 + 20 || buf[hlen] != ICMP_DUR ||
 	    buf[hlen + 1] != ICMP_DUR_PORT)
-		return 0;
+		return;
 
 	/* The original datagram, which we sent: inner IP and UDP headers. */
 	hlen += 8;
 	if ((buf[hlen] >> 4) != 4 || buf[hlen + 9] != IP_PROTO_UDP)
-		return 0;
+		return;
 	ilen = (buf[hlen] & 0x0f) * 4;
 	if (len < hlen + ilen + 4)
-		return 0;
+		return;
 
 	IP_ADDR4(&local, buf[hlen + 12], buf[hlen + 13], buf[hlen + 14],
 	    buf[hlen + 15]);
@@ -195,32 +195,30 @@ lwip_hook_ip4_input(struct pbuf * p, struct netif * inp __unused)
 	udpsock_port_unreach(&local,
 	    (buf[hlen + ilen] << 8) | buf[hlen + ilen + 1], &remote,
 	    (buf[hlen + ilen + 2] << 8) | buf[hlen + ilen + 3]);
-
-	return 0;
 }
 
 /*
  * The same for IPv6: ICMPv6 port-unreachable messages.  Extension headers are
  * not looked through, in the outer packet or the inner one.
  */
-int
-lwip_hook_ip6_input(struct pbuf * p, struct netif * inp __unused)
+void
+udpsock_ip6_input(struct pbuf * p)
 {
 	uint8_t buf[40 + 8 + 40 + 8];	/* IPv6, ICMPv6, inner IPv6, UDP */
 	ip_addr_t local, remote;
 	unsigned int len;
 
 	if (p->len < 40 || ((uint8_t *)p->payload)[6] != IP6_NEXTH_ICMP6)
-		return 0;
+		return;
 
 	len = pbuf_copy_partial(p, buf, sizeof(buf), 0);
 
 	if (len < sizeof(buf) || (buf[0] >> 4) != 6 ||
 	    buf[6] != IP6_NEXTH_ICMP6 || buf[40] != ICMP6_TYPE_DUR ||
 	    buf[41] != ICMP6_DUR_PORT)
-		return 0;
+		return;
 	if ((buf[48] >> 4) != 6 || buf[48 + 6] != IP6_NEXTH_UDP)
-		return 0;
+		return;
 
 	ip_addr_set_zero_ip6(&local);
 	ip_addr_set_zero_ip6(&remote);
@@ -228,8 +226,6 @@ lwip_hook_ip6_input(struct pbuf * p, struct netif * inp __unused)
 	memcpy(ip_2_ip6(&remote)->addr, &buf[48 + 24], 16);
 	udpsock_port_unreach(&local, (buf[88] << 8) | buf[89], &remote,
 	    (buf[90] << 8) | buf[91]);
-
-	return 0;
 }
 
 /*

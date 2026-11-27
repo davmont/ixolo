@@ -99,6 +99,10 @@ void udpsock_init(void);
 sockid_t udpsock_socket(int domain, int protocol, struct sock ** sock,
 	const struct sockevent_ops ** ops);
 
+/* udpsock.c, called from pfil.c */
+void udpsock_ip4_input(struct pbuf * p);
+void udpsock_ip6_input(struct pbuf * p);
+
 /* rawsock.c */
 void rawsock_init(void);
 sockid_t rawsock_socket(int domain, int protocol, struct sock ** sock,
@@ -123,6 +127,18 @@ void mibtree_register_lwip(struct rmib_node * node);
 void ifconf_init(void);
 int ifconf_ioctl(struct sock * sock, unsigned long request,
 	const struct sockdriver_data * data, endpoint_t user_endpt);
+
+/* cdev.c */
+void cdev_process(message * m_ptr, int ipc_status);
+
+/* pfil.c */
+struct ifdev;
+struct npf;
+void pfil_init(void);
+void pfil_ifattach(struct ifdev * ifdev);
+void pfil_ifdetach(struct ifdev * ifdev);
+void pfil_set_active(int active);
+struct npf *pfil_get_npf(void);
 
 /* bpf_filter.c */
 u_int bpf_filter_ext(const struct bpf_insn * pc, const struct pbuf * pbuf,

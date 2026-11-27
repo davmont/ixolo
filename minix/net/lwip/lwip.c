@@ -222,6 +222,9 @@ init(int type __unused, sef_init_info_t * init __unused)
 	udpsock_init();
 	rawsock_init();
 
+	/* Initialize the packet filter, before any interfaces are added. */
+	pfil_init();
+
 	/* Initialize the various network interface modules. */
 	ifdev_init();
 	loopif_init();
@@ -362,7 +365,7 @@ main(void)
 
 			/* Is this a character (or block) device request? */
 			if (IS_CDEV_RQ(m.m_type) || IS_BDEV_RQ(m.m_type)) {
-				bpfdev_process(&m, ipc_status);
+				cdev_process(&m, ipc_status);
 
 				break;
 			}

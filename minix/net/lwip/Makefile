@@ -6,7 +6,7 @@ PROG=	lwip
 SRCS=	lwip.c mempool.c pchain.c addr.c addrpol.c tcpisn.c mcast.c ipsock.c \
 	pktsock.c tcpsock.c udpsock.c rawsock.c ifdev.c ifaddr.c loopif.c \
 	ethif.c ndev.c rttree.c route.c rtsock.c lnksock.c lldata.c mibtree.c \
-	ifconf.c bpfdev.c bpf_filter.c util.c
+	ifconf.c bpfdev.c bpf_filter.c util.c pfil.c npfdev.c cdev.c
 
 FILES=${PROG}.conf
 FILESNAME=${PROG}
@@ -14,6 +14,13 @@ FILESDIR= /etc/system.conf.d
 
 CPPFLAGS+=	-I${NETBSDSRCDIR}/minix/lib/liblwip/dist/src/include
 CPPFLAGS+=	-I${NETBSDSRCDIR}/minix/lib/liblwip/lib
+
+# The NPF packet filter core, a private library (see pfil.c).
+LIBNPFKERNDIR!=	cd ${NETBSDSRCDIR}/minix/lib/libnpfkern && ${PRINTOBJDIR}
+.for f in pfil.c npfdev.c
+CPPFLAGS.${f}+=	-I${NETBSDSRCDIR}/minix/lib/libnpfkern
+CPPFLAGS.${f}+=	-I${NETBSDSRCDIR}/external/bsd/npf/dist/kern
+.endfor
 
 # Disabling USE_INET6 only superficially hides IPv6 support in the service.
 .if (${USE_INET6} != "no")
@@ -25,6 +32,8 @@ CPPFLAGS+=	-DINET6
 # disable them altogether.
 CPPFLAGS+=	-Wno-address
 
+DPADD+=	${LIBNPFKERNDIR}/libnpfkern.a
+LDADD+=	${LIBNPFKERNDIR}/libnpfkern.a
 DPADD+=	${LIBLWIP} ${LIBSOCKEVENT} ${LIBSOCKDRIVER} ${LIBCHARDRIVER} \
 	${LIBSYS} ${LIBTIMERS}
 LDADD+=	-llwip -lsockevent -lsockdriver -lchardriver -lsys -ltimers

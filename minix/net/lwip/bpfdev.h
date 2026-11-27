@@ -10,7 +10,7 @@ struct bpfdev_link {
 };
 
 void bpfdev_init(void);
-void bpfdev_process(message * m_ptr, int ipc_status);
+extern const struct chardriver bpfdev_tab;	/* see cdev.c */
 void bpfdev_detach(struct bpfdev_link * bpf);
 void bpfdev_input(struct bpfdev_link * bpf, const struct pbuf * pbuf);
 void bpfdev_output(struct bpfdev_link * bpf, const struct pbuf * pbuf);
