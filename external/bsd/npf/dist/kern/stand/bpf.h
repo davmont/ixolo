@@ -38,6 +38,17 @@
 #define _NPF_BPF_H_
 
 #include <inttypes.h>
+#if defined(__minix)
+/*
+ * MINIX-local: MINIX's <pcap/bpf.h> is NetBSD's <net/bpf.h>, which defines
+ * the BPF extension types below itself (struct bpf_ctx with __BPF_PRIVATE).
+ */
+#define	__BPF_PRIVATE
+#include <pcap/bpf.h>
+#ifndef BPF_MAX_MEMWORDS		/* there in the kernel only */
+#define	BPF_MAX_MEMWORDS	30
+#endif
+#else
 #include <pcap/bpf.h>
 
 typedef struct bpf_args {
@@ -81,6 +92,7 @@ struct bpf_ctx {
 	 */
 	bpf_memword_init_t	preinited;
 };
+#endif /* !__minix */
 
 typedef unsigned int (*bpfjit_func_t)(const bpf_ctx_t *, bpf_args_t *);
 

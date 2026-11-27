@@ -109,7 +109,7 @@ bpf_jit_freecode(bpfjit_func_t func)
 
 #endif
 
-#ifndef __NetBSD__
+#if !defined(__NetBSD__) && !defined(__minix)	/* MINIX: <sys/endian.h> */
 static inline uint16_t
 be16dec(const void *buf)
 {

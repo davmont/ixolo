@@ -410,6 +410,17 @@ typedef struct ifnet ifnet_t;
 #define	IFNAMSIZ	16
 #endif
 
+#if defined(__minix)
+/*
+ * MINIX-local: the host (the LWIP service) provides IPv4 reassembly, with
+ * the semantics of NetBSD's ip_reass_packet(): on success, *mp is the full
+ * datagram, or NULL if more fragments are needed; on error, the fragment
+ * has been consumed and *mp is unchanged (NPF frees it).
+ */
+struct mbuf;
+int	npf_minix_ip_reass_packet(struct mbuf **);
+#define	ip_reass_packet(p)		npf_minix_ip_reass_packet(p)
+#else
 static inline int
 npfkern_ip_reass_packet(void *x)
 {
@@ -418,6 +429,7 @@ npfkern_ip_reass_packet(void *x)
 }
 
 #define	ip_reass_packet(p)		npfkern_ip_reass_packet(p)
+#endif
 #define	ip_output(m, a, b, c, d, e)	ENOTSUP
 #define	icmp_error(m, t, c, a, b)
 #define	in_cksum(m, len)	0
