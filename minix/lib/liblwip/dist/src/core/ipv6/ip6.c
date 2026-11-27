@@ -444,6 +444,14 @@ ip6_forward(struct pbuf *p, struct ip6_hdr *iphdr, struct netif *inp)
     return;
   }
 
+#ifdef LWIP_HOOK_IP6_OUTPUT
+  if (LWIP_HOOK_IP6_OUTPUT(p, netif) != ERR_OK) {
+    /* the packet has been filtered out */
+    IP6_STATS_INC(ip6.drop);
+    return;
+  }
+#endif /* LWIP_HOOK_IP6_OUTPUT */
+
   if (netif->mtu && (p->tot_len > netif->mtu)) {
 #if LWIP_ICMP6
     /* Don't send ICMP messages in response to ICMP messages */
@@ -1244,6 +1252,17 @@ ip6_output_if_src(struct pbuf *p, const ip6_addr_t *src, const ip6_addr_t *dest,
 
   LWIP_DEBUGF(IP6_DEBUG, ("ip6_output_if: %c%c%"U16_F"\n", netif->name[0], netif->name[1], (u16_t)netif->num));
   ip6_debug_print(p);
+
+#ifdef LWIP_HOOK_IP6_OUTPUT
+  {
+    err_t hook_err = LWIP_HOOK_IP6_OUTPUT(p, netif);
+    if (hook_err != ERR_OK) {
+      /* the packet has been filtered out */
+      IP6_STATS_INC(ip6.drop);
+      return hook_err;
+    }
+  }
+#endif /* LWIP_HOOK_IP6_OUTPUT */
 
 #if ENABLE_LOOPBACK
   {
