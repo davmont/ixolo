@@ -19,6 +19,7 @@ SUBDIR+=	liblwip
 SUBDIR+=	libminc
 SUBDIR+=	libminixfs
 SUBDIR+=	libnetdriver
+SUBDIR+=	libnpfkern
 SUBDIR+=	libsffs
 SUBDIR+=	libsockdriver
 SUBDIR+=	libsockevent
