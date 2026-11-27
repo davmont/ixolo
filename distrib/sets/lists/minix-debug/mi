@@ -962,6 +962,8 @@
 ./usr/libdata/debug/usr/tests/minix-posix/ddekit        minix-debug
 ./usr/libdata/debug/usr/tests/minix-posix/ddekit/ddekittest_driver.debug minix-debug     debug
 ./usr/libdata/debug/usr/tests/minix-posix/mod.debug     minix-debug     debug
+./usr/libdata/debug/usr/tests/minix-posix/npf           minix-debug
+./usr/libdata/debug/usr/tests/minix-posix/npf/npfdev_test.debug minix-debug     debug
 ./usr/libdata/debug/usr/tests/minix-posix/npfdeps       minix-debug
 ./usr/libdata/debug/usr/tests/minix-posix/npfdeps/nvlist_add_test.debug minix-debug     debug
 ./usr/libdata/debug/usr/tests/minix-posix/npfdeps/nvlist_append_test.debug minix-debug     debug
