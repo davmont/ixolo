@@ -1,0 +1,96 @@
+From: MINIX 3 (ixolo)
+Subject: [PATCH 5/5] MINIX 3 only: add IPv4 and IPv6 output hooks
+
+This patch adds two hooks, LWIP_HOOK_IP4_OUTPUT and LWIP_HOOK_IP6_OUTPUT,
+which the LWIP service uses for packet filtering (NPF).  lwIP has an input
+hook for each IP version, but no output counterpart.  The netif output
+functions cannot be used instead, because they are called after
+fragmentation: a packet filter would see fragments of outgoing packets.
+
+The hooks are called with the packet and the outgoing interface, once the
+IP header is complete and before the packet is fragmented, both for
+locally generated packets (ip4_output_if_opt_src, ip6_output_if_src) and
+for forwarded packets (ip4_forward, ip6_forward).  A hook returning
+anything other than ERR_OK makes lwIP drop the packet.  A hook may modify
+the packet in place, but must not replace or free it.
+
+If this patch can no longer be applied, the hooks have to be placed in
+the equivalent spots again: after the IP header has been finalised and
+before any fragmentation decision.
+---
+diff --git a/src/core/ipv4/ip4.c b/src/core/ipv4/ip4.c
+index 44e33fbbcca..77aba8a5db9 100644
+--- a/src/core/ipv4/ip4.c
++++ b/src/core/ipv4/ip4.c
+@@ -378,6 +378,15 @@ ip4_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
+     break;
+   }
+ 
++#ifdef LWIP_HOOK_IP4_OUTPUT
++  if (LWIP_HOOK_IP4_OUTPUT(p, netif) != ERR_OK) {
++    /* the packet has been filtered out */
++    IP_STATS_INC(ip.drop);
++    MIB2_STATS_INC(mib2.ipoutdiscards);
++    return;
++  }
++#endif /* LWIP_HOOK_IP4_OUTPUT */
++
+   LWIP_DEBUGF(IP_DEBUG, ("ip4_forward: forwarding packet to %"U16_F".%"U16_F".%"U16_F".%"U16_F"\n",
+                          ip4_addr1_16(ip4_current_dest_addr()), ip4_addr2_16(ip4_current_dest_addr()),
+                          ip4_addr3_16(ip4_current_dest_addr()), ip4_addr4_16(ip4_current_dest_addr())));
+@@ -1032,6 +1041,18 @@ ip4_output_if_opt_src(struct pbuf *p, const ip4_addr_t *src, const ip4_addr_t *d
+   LWIP_DEBUGF(IP_DEBUG, ("ip4_output_if: %c%c%"U16_F"\n", netif->name[0], netif->name[1], (u16_t)netif->num));
+   ip4_debug_print(p);
+ 
++#ifdef LWIP_HOOK_IP4_OUTPUT
++  {
++    err_t hook_err = LWIP_HOOK_IP4_OUTPUT(p, netif);
++    if (hook_err != ERR_OK) {
++      /* the packet has been filtered out */
++      IP_STATS_INC(ip.drop);
++      MIB2_STATS_INC(mib2.ipoutdiscards);
++      return hook_err;
++    }
++  }
++#endif /* LWIP_HOOK_IP4_OUTPUT */
++
+ #if ENABLE_LOOPBACK
+   if (ip4_addr_eq(dest, netif_ip4_addr(netif))
+ #if !LWIP_HAVE_LOOPIF
+diff --git a/src/core/ipv6/ip6.c b/src/core/ipv6/ip6.c
+index 602e6b5d246..1f2a3d873d6 100644
+--- a/src/core/ipv6/ip6.c
++++ b/src/core/ipv6/ip6.c
+@@ -444,6 +444,14 @@ ip6_forward(struct pbuf *p, struct ip6_hdr *iphdr, struct netif *inp)
+     return;
+   }
+ 
++#ifdef LWIP_HOOK_IP6_OUTPUT
++  if (LWIP_HOOK_IP6_OUTPUT(p, netif) != ERR_OK) {
++    /* the packet has been filtered out */
++    IP6_STATS_INC(ip6.drop);
++    return;
++  }
++#endif /* LWIP_HOOK_IP6_OUTPUT */
++
+   if (netif->mtu && (p->tot_len > netif->mtu)) {
+ #if LWIP_ICMP6
+     /* Don't send ICMP messages in response to ICMP messages */
+@@ -1245,6 +1253,17 @@ ip6_output_if_src(struct pbuf *p, const ip6_addr_t *src, const ip6_addr_t *dest,
+   LWIP_DEBUGF(IP6_DEBUG, ("ip6_output_if: %c%c%"U16_F"\n", netif->name[0], netif->name[1], (u16_t)netif->num));
+   ip6_debug_print(p);
+ 
++#ifdef LWIP_HOOK_IP6_OUTPUT
++  {
++    err_t hook_err = LWIP_HOOK_IP6_OUTPUT(p, netif);
++    if (hook_err != ERR_OK) {
++      /* the packet has been filtered out */
++      IP6_STATS_INC(ip6.drop);
++      return hook_err;
++    }
++  }
++#endif /* LWIP_HOOK_IP6_OUTPUT */
++
+ #if ENABLE_LOOPBACK
+   {
+     int i;

@@ -378,6 +378,15 @@ ip4_forward(struct pbuf *p, struct ip_hdr *iphdr, struct netif *inp)
     break;
   }
 
+#ifdef LWIP_HOOK_IP4_OUTPUT
+  if (LWIP_HOOK_IP4_OUTPUT(p, netif) != ERR_OK) {
+    /* the packet has been filtered out */
+    IP_STATS_INC(ip.drop);
+    MIB2_STATS_INC(mib2.ipoutdiscards);
+    return;
+  }
+#endif /* LWIP_HOOK_IP4_OUTPUT */
+
   LWIP_DEBUGF(IP_DEBUG, ("ip4_forward: forwarding packet to %"U16_F".%"U16_F".%"U16_F".%"U16_F"\n",
                          ip4_addr1_16(ip4_current_dest_addr()), ip4_addr2_16(ip4_current_dest_addr()),
                          ip4_addr3_16(ip4_current_dest_addr()), ip4_addr4_16(ip4_current_dest_addr())));
@@ -1031,6 +1040,18 @@ ip4_output_if_opt_src(struct pbuf *p, const ip4_addr_t *src, const ip4_addr_t *d
 
   LWIP_DEBUGF(IP_DEBUG, ("ip4_output_if: %c%c%"U16_F"\n", netif->name[0], netif->name[1], (u16_t)netif->num));
   ip4_debug_print(p);
+
+#ifdef LWIP_HOOK_IP4_OUTPUT
+  {
+    err_t hook_err = LWIP_HOOK_IP4_OUTPUT(p, netif);
+    if (hook_err != ERR_OK) {
+      /* the packet has been filtered out */
+      IP_STATS_INC(ip.drop);
+      MIB2_STATS_INC(mib2.ipoutdiscards);
+      return hook_err;
+    }
+  }
+#endif /* LWIP_HOOK_IP4_OUTPUT */
 
 #if ENABLE_LOOPBACK
   if (ip4_addr_eq(dest, netif_ip4_addr(netif))

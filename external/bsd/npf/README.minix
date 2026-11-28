@@ -1,0 +1,54 @@
+NPF: the NetBSD packet filter, in its standalone form ("npfkern"), as used
+by userspace network stacks.  On MINIX it runs inside the LWIP service.
+
+Upstream:	https://github.com/rmind/npf
+Imported:	commit 99f0756; dist/ is upstream's src/kern, src/libnpf and
+		src/npfctl, with LICENSE and README.md.
+License:	BSD-2-Clause (dist/LICENSE).
+Depends on:	libnv (sys/external/bsd/libnv), thmap, libqsbr and liblpm
+		(external/bsd/*), all built into minix/lib/libnpfkern.
+
+Local changes (MINIX):
+- dist/kern/stand/bpf.h: MINIX's <pcap/bpf.h> is NetBSD's <net/bpf.h>,
+  which already has struct bpf_args and friends; use it (with
+  __BPF_PRIVATE) instead of redefining them.
+- dist/kern/stand/bpf_filter.c: <sys/endian.h> has be16dec()/be32dec().
+- dist/kern/stand/npf_stand.h: ip_reass_packet() calls the host's
+  npf_minix_ip_reass_packet() instead of failing with ENOTSUP.  The
+  standalone stub made NPF drop every IPv4 fragment, because its
+  "ip4.reassembly" parameter is on by default.  The LWIP service
+  reassembles with lwIP's own code.
+
+How it fits together:
+- minix/lib/libnpfkern builds dist/kern (as upstream's src/kern/Makefile
+  does, without npf_os.c) with the libraries above and a few libc pieces
+  that system services lack (npf_minix_libc.c), as a private library.
+  npf_minix_ctl.c runs control operations on packed nvlists.
+- minix/net/lwip/pfil.c hooks NPF into lwIP: the IPv4/IPv6 input hooks,
+  and output hooks that are MINIX-local to lwIP (liblwip patch 0005),
+  called before fragmentation.  Packets looped back to a local address of
+  another interface are filtered on that interface, not on lo0.
+- minix/net/lwip/npfdev.c is /dev/npf (major 7, minor 128, cloning; it
+  shares the BPF major).  Version and on/off switch are ioctls as on
+  NetBSD.  Other operations are a write of the NetBSD ioctl number (as a
+  uint64_t) followed by the packed nvlist request, and reads of the
+  response: MINIX ioctls cannot carry nvlist_ref_t's pointers.
+
+Behaviour:
+- As on NetBSD, filtering is off until switched on ("npfctl start").  On,
+  with no ruleset loaded, everything passes; a loaded ruleset blocks what
+  it does not pass ("flush" loads pass-everything again).
+- The LWIP service keeps NPF's state in memory: if the service restarts,
+  filtering is off again and the ruleset is gone.
+- "return-rst"/"return-icmp" rules block without sending a reply: the
+  standalone NPF cannot send packets.
+- A blocked outgoing packet fails the send with EHOSTUNREACH.
+- Outgoing packets that are IPv4 fragments already (raw IP_HDRINCL sockets)
+  are dropped while "ip4.reassembly" is on.
+- NAT (PR 4) is not supported yet: NPF rewrites packets in place, and
+  lwIP keeps TCP segments it may retransmit.
+
+Tested by minix/tests/npf (testnpf.sh).
+
+To update: copy upstream src/kern, src/libnpf and src/npfctl over dist/,
+then re-apply the changes above.

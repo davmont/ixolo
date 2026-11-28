@@ -50,4 +50,20 @@ int lwip_hook_ip6_input(struct pbuf * p, struct netif * inp);
 
 #define LWIP_HOOK_IP6_INPUT lwip_hook_ip6_input
 
+/*
+ * IPv4 and IPv6 output hooks, used for packet filtering.  These hooks are
+ * MINIX-local (see patch 0005): they are called for locally generated and
+ * forwarded packets after the outgoing interface is known and the IP header is
+ * complete, but before fragmentation.  Returning anything other than ERR_OK
+ * drops the packet, and the error is returned to the sender if there is one.
+ * The hooks may modify the packet in place but must not replace it.
+ */
+err_t lwip_hook_ip4_output(struct pbuf * p, struct netif * netif);
+
+#define LWIP_HOOK_IP4_OUTPUT lwip_hook_ip4_output
+
+err_t lwip_hook_ip6_output(struct pbuf * p, struct netif * netif);
+
+#define LWIP_HOOK_IP6_OUTPUT lwip_hook_ip6_output
+
 #endif /* !LWIP_LWIPHOOKS_H */

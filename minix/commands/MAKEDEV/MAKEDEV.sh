@@ -42,7 +42,7 @@ STD_DEVICES="
 	eepromb3s54 eepromb3s55 eepromb3s56 eepromb3s57
 	fb0 fbd filter hello
 	i2c-1 i2c-2 i2c-3
-	klog ptmx random
+	klog npf ptmx random
 	sht21b1s40 sht21b2s40 sht21b3s40
 	tsl2550b1s39 tsl2550b2s39 tsl2550b3s39
 	ttyp0 ttyp1 ttyp2 ttyp3 ttyp4 ttyp5 ttyp6 ttyp7 ttyp8 ttyp9
@@ -131,6 +131,7 @@ Where key is one of the following:
   audio mixer		  # Make audio devices
   bpf                     # Make /dev/bpf
   klog                    # Make /dev/klog
+  npf                     # Make /dev/npf
   ptmx                    # Make /dev/ptmx
   random                  # Make /dev/random, /dev/urandom
   filter                  # Make /dev/filter
@@ -223,6 +224,11 @@ do
 		# assume individual devices are numbered, so also create bpf0.
 		makedev ${dev} c 7 0 ${uname} ${gname} 600
 		makedev ${dev}0 c 7 0 ${uname} ${gname} 600
+		;;
+	npf)
+		# NPF packet filter control device, for the LWIP service
+		# (shares the BPF major number; this is a cloning device)
+		makedev ${dev} c 7 128 ${uname} ${gname} 600
 		;;
 	c[0-3]d[0-7])
 		# Whole disk devices.

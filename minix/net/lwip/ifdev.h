@@ -74,6 +74,7 @@ struct ifdev {
 	uint32_t ifdev_nd6flags;	/* ND6-related flags (ND6_IFF_) */
 	const struct ifdev_ops *ifdev_ops; /* interface operations table */
 	TAILQ_HEAD(, bpfdev_link) ifdev_bpf; /* list of attached BPF devices */
+	void *ifdev_npf;		/* NPF interface data (pfil.c) */
 };
 
 #define ifdev_get_name(ifdev)	((ifdev)->ifdev_name)

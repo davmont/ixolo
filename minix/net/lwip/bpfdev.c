@@ -1343,7 +1343,7 @@ bpfdev_peers(struct rmib_call * call, struct rmib_node * node __unused,
 	return off;
 }
 
-static const struct chardriver bpfdev_tab = {
+const struct chardriver bpfdev_tab = {
 	.cdr_open		= bpfdev_open,
 	.cdr_close		= bpfdev_close,
 	.cdr_read		= bpfdev_read,
@@ -1352,14 +1352,3 @@ static const struct chardriver bpfdev_tab = {
 	.cdr_cancel		= bpfdev_cancel,
 	.cdr_select		= bpfdev_select
 };
-
-/*
- * Process a character driver request.  Since the LWIP service offers character
- * devices for BPF only, it must be a request for a BPF device.
- */
-void
-bpfdev_process(message * m_ptr, int ipc_status)
-{
-
-	chardriver_process(&bpfdev_tab, m_ptr, ipc_status);
-}
